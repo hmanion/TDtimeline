@@ -18,7 +18,7 @@
         <div>
           <p class="eyebrow">Interactive Playbook</p>
           <h1>Campaign Timeline Planner</h1>
-          <p class="subtitle">Plan, revise, and track policy SLA, revised delivery, and live execution separately.</p>
+          <p class="subtitle">Set a locked baseline, track actual workflow step completion dates, and see feasibility impacts clearly.</p>
         </div>
       </div>
       <div class="nav-links">
@@ -28,60 +28,34 @@
       </div>
     </header>
 
-    <section class="grid planner-grid">
-      <article class="card">
+    <section class="grid">
+      <article class="card full">
         <header class="card-header">
-          <h2>Campaign Inputs</h2>
-          <p>Kick-off is required for timeline calculations.</p>
+          <h2>1) Baseline Setup (Locked)</h2>
+          <p>Enter contracted dates and KO once, then lock them. These dates drive the ideal timeline.</p>
         </header>
         <div class="card-body form-grid">
           <label>Campaign name
             <input id="campaignName" type="text" placeholder="Q1 Leadership Campaign" />
           </label>
-          <label>Kick-off date (required)
-            <input id="kickoffDate" type="date" required />
+          <label>Contract start date (required)
+            <input id="contractStartDate" type="date" />
           </label>
-          <label>Interview planned date
-            <input id="interviewPlannedDate" type="date" />
+          <label>Contract end date (required)
+            <input id="contractEndDate" type="date" />
           </label>
-          <label>Interview actual date
-            <input id="interviewActualDate" type="date" />
+          <label>Kick-off call date (required)
+            <input id="kickoffDate" type="date" />
           </label>
-          <label>First publish date
-            <input id="firstPublishDate" type="date" />
-          </label>
-          <label>Live execution status
-            <select id="liveStatus"></select>
+          <label class="check-row"><input id="extension30Days" type="checkbox" /> Apply 30-day extension</label>
+          <label>Extension approved date (optional)
+            <input id="extensionApprovedDate" type="date" />
           </label>
         </div>
-      </article>
-
-      <article class="card">
-        <header class="card-header">
-          <h2>Settings</h2>
-          <p>Thresholds and default windows for revised planning.</p>
-        </header>
-        <div class="card-body form-grid">
-          <label>At-risk threshold X (days)
-            <input id="riskX" type="number" min="1" />
-          </label>
-          <label>Off-track threshold Y (days)
-            <input id="riskY" type="number" min="1" />
-          </label>
-          <label>Publish risk threshold Z (days)
-            <input id="riskZ" type="number" min="1" />
-          </label>
-          <label>Production window (days)
-            <input id="prodDays" type="number" min="1" />
-          </label>
-          <label>Review window (days)
-            <input id="reviewDays" type="number" min="1" />
-          </label>
-          <label>Publish window (days)
-            <input id="publishDays" type="number" min="1" />
-          </label>
-          <label class="check-row"><input id="useBusinessDays" type="checkbox" /> Use business days</label>
-          <label class="check-row"><input id="showInterviewClient" type="checkbox" checked /> Show interview date in client view</label>
+        <div class="card-body actions-row">
+          <button id="lockBaseline" class="primary-link" type="button">Lock baseline</button>
+          <button id="unlockBaseline" class="ghost" type="button">Unlock baseline</button>
+          <span id="baselineLockState" class="save-hint"></span>
         </div>
       </article>
     </section>
@@ -89,35 +63,75 @@
     <section class="grid">
       <article class="card full">
         <header class="card-header">
-          <h2>Status Overview</h2>
-          <p>Three timeline truths tracked independently.</p>
+          <h2>2) Ideal Timeline (Read-only)</h2>
+          <p>Auto-generated from baseline. These are ideal workflow step dates/windows and cannot be edited.</p>
         </header>
-        <div class="card-body status-cards" id="statusCards"></div>
+        <div class="card-body">
+          <div id="idealSummary" class="timeline-item"></div>
+          <div id="idealPhaseBars" class="phase-list"></div>
+          <div id="idealMilestoneTable"></div>
+        </div>
+      </article>
+    </section>
+
+    <section class="grid">
+      <article class="card full">
+        <header class="card-header">
+          <h2>3) Actual Progress Updates</h2>
+          <p>Only update actual workflow step completion dates here. Future dates are blocked.</p>
+        </header>
+        <div class="card-body" id="actualMilestoneTable"></div>
+      </article>
+    </section>
+
+    <section class="grid">
+      <article class="card full">
+        <header class="card-header">
+          <h2>Timeline Preview (Gantt)</h2>
+          <p>Full-width phase bands for Production, Promotion, and Reporting, with workflow timing and completion markers.</p>
+        </header>
+        <div class="card-body">
+          <div class="timeline-stack">
+            <h3 class="mini-title">Client timeline</h3>
+            <div id="timelineVisualClient" class="timeline-visual"></div>
+            <div id="timelineViewClient"></div>
+          </div>
+          <div class="timeline-stack">
+            <h3 class="mini-title">Internal timeline</h3>
+            <div id="timelineVisualInternal" class="timeline-visual"></div>
+            <div id="timelineViewInternal"></div>
+          </div>
+        </div>
       </article>
     </section>
 
     <section class="grid planner-grid">
       <article class="card">
         <header class="card-header">
-          <h2>Milestones</h2>
-          <p>Editing a milestone date shifts downstream dates.</p>
+          <h2>4) Impact + Feasibility</h2>
+          <p>See campaign viability, policy status, and latest timeline impact.</p>
         </header>
         <div class="card-body">
-          <div id="milestoneTable"></div>
+          <div id="feasibilityBanner" class="feasibility-banner"></div>
+          <div id="statusCards" class="status-cards"></div>
+          <div class="impact-wrap">
+            <h3 class="mini-title">Latest Impact</h3>
+            <div id="impactSummary"></div>
+          </div>
         </div>
       </article>
 
       <article class="card">
         <header class="card-header">
-          <h2>View</h2>
-          <p>Switch between client and internal context.</p>
+          <h2>Next CSM Actions</h2>
+          <p>Clear actions based on current campaign position.</p>
         </header>
         <div class="card-body">
-          <div class="view-toggle">
-            <button id="viewClient" class="ghost active" type="button">Client view</button>
-            <button id="viewInternal" class="ghost" type="button">Internal view</button>
-          </div>
-          <div id="timelineView"></div>
+          <label>Current campaign stage
+            <select id="liveStage"></select>
+          </label>
+          <div id="primaryAction" class="primary-action"></div>
+          <ul id="csmActions" class="rec-list"></ul>
         </div>
       </article>
     </section>
@@ -125,14 +139,14 @@
     <section class="grid">
       <article class="card full">
         <header class="card-header">
-          <h2>Actions</h2>
-          <p>Create revisions, export schedule, or validate scenarios.</p>
+          <h2>Outputs</h2>
+          <p>Export baseline + ideal + actual timeline data, or capture a revision snapshot.</p>
         </header>
         <div class="card-body actions-row">
-          <button id="createRevision" class="primary-link" type="button">Create revised timeline</button>
+          <button id="createRevision" class="primary-link" type="button">Create revision snapshot</button>
+          <button id="resetPlanner" class="ghost" type="button">Clear planner</button>
           <button id="exportJson" class="ghost" type="button">Export JSON</button>
           <button id="exportCsv" class="ghost" type="button">Export CSV</button>
-          <button id="runTests" class="ghost" type="button">Run acceptance tests</button>
           <span id="saveHint" class="save-hint"></span>
         </div>
       </article>
@@ -142,7 +156,7 @@
       <article class="card full">
         <header class="card-header">
           <h2>Revisions</h2>
-          <p>Policy deadline is fixed and unaffected by revisions.</p>
+          <p>Snapshots preserve baseline, policy, and projected state over time.</p>
         </header>
         <div class="card-body" id="revisionsList"></div>
       </article>
@@ -151,10 +165,36 @@
     <section class="grid">
       <article class="card full">
         <header class="card-header">
-          <h2>Acceptance Test Results</h2>
-          <p>Six scenarios validating planner logic.</p>
+          <h2>Team Defaults</h2>
+          <p>Advanced settings for admins. Most CSMs can keep defaults.</p>
         </header>
-        <div class="card-body" id="testResults">Not run yet.</div>
+        <div class="card-body">
+          <details class="advanced-panel">
+            <summary>Open advanced settings</summary>
+            <div class="form-grid advanced-grid">
+              <label class="check-row"><input id="useBusinessDays" type="checkbox" /> Use business days in date offsets</label>
+              <label class="check-row"><input id="showInterviewClient" type="checkbox" checked /> Show interview date in client view</label>
+            </div>
+          </details>
+        </div>
+      </article>
+    </section>
+
+    <section class="grid">
+      <article class="card full">
+        <header class="card-header">
+          <h2>Admin Validation</h2>
+          <p>Optional acceptance tests for planner integrity.</p>
+        </header>
+        <div class="card-body">
+          <details class="advanced-panel">
+            <summary>Open acceptance test results</summary>
+            <div class="actions-row">
+              <button id="runTests" class="ghost" type="button">Run acceptance tests</button>
+            </div>
+            <div id="testResults">Not run yet.</div>
+          </details>
+        </div>
       </article>
     </section>
   </div>
