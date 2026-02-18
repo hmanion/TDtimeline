@@ -139,16 +139,16 @@
 }
 
 .timeline-range {
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
-  color: #2f3550;
+  color: #1f2538;
   margin: 0 0 8px;
 }
 
 .timeline-mode-label {
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 700;
-  color: #2f3550;
+  color: #1f2538;
   margin: 0 0 4px;
 }
 
@@ -158,8 +158,8 @@
   gap: 10px 14px;
   align-items: center;
   margin-top: 8px;
-  font-size: 12px;
-  color: #2f3550;
+  font-size: 13px;
+  color: #1f2538;
 }
 
 .timeline-key > span {
@@ -235,29 +235,29 @@
 }
 
 .vis-axis {
-  stroke: #8790aa;
-  stroke-width: 1;
+  stroke: #6f7895;
+  stroke-width: 1.2;
 }
 
 .vis-week-line {
-  stroke: rgba(63, 69, 95, 0.16);
+  stroke: rgba(40, 48, 74, 0.22);
   stroke-width: 1;
 }
 
 .vis-week-current {
-  stroke: rgba(27, 28, 55, 0.45);
-  stroke-width: 2;
+  stroke: rgba(24, 29, 50, 0.75);
+  stroke-width: 2.2;
 }
 
 .vis-week-label {
-  fill: #2f3550;
-  font-size: 10px;
-  font-weight: 600;
+  fill: #1f2538;
+  font-size: 11px;
+  font-weight: 700;
   font-family: "Montserrat", sans-serif;
 }
 
 .vis-lane {
-  stroke: rgba(27, 28, 55, 0.1);
+  stroke: rgba(27, 28, 55, 0.18);
   stroke-width: 1;
 }
 
@@ -274,21 +274,21 @@
 }
 
 .vis-phase-prod-band {
-  fill: rgba(48, 144, 139, 0.12);
+  fill: rgba(48, 144, 139, 0.18);
 }
 
 .vis-phase-prom-band {
-  fill: rgba(230, 133, 46, 0.12);
+  fill: rgba(230, 133, 46, 0.19);
 }
 
 .vis-phase-rep-band {
-  fill: rgba(27, 28, 55, 0.08);
+  fill: rgba(27, 28, 55, 0.14);
 }
 
 .vis-task {
-  fill: rgba(58, 96, 168, 0.3);
-  stroke: rgba(58, 96, 168, 0.85);
-  stroke-width: 1;
+  fill: rgba(58, 96, 168, 0.38);
+  stroke: rgba(41, 73, 133, 0.95);
+  stroke-width: 1.2;
 }
 
 .vis-plan-node {
@@ -308,8 +308,8 @@
 }
 
 .vis-text {
-  fill: #3f455f;
-  font-size: 11px;
+  fill: #1f2538;
+  font-size: 12px;
   font-family: "Montserrat", sans-serif;
 }
 
@@ -318,22 +318,23 @@
 }
 
 .vis-row-label {
-  fill: #2f3550;
-  font-size: 10px;
-  font-weight: 600;
+  fill: #1f2538;
+  font-size: 11px;
+  font-weight: 700;
   font-family: "Montserrat", sans-serif;
 }
 
 .vis-bar-label {
-  fill: #2f3550;
-  font-size: 10px;
-  font-weight: 600;
+  fill: #1f2538;
+  font-size: 11px;
+  font-weight: 700;
   font-family: "Montserrat", sans-serif;
 }
 
 .vis-milestone-label {
-  fill: #2f3550;
-  font-size: 10px;
+  fill: #1f2538;
+  font-size: 11px;
+  font-weight: 600;
   font-family: "Montserrat", sans-serif;
 }
 

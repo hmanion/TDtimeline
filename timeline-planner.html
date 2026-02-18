@@ -63,24 +63,14 @@
     <section class="grid">
       <article class="card full">
         <header class="card-header">
-          <h2>2) Ideal Timeline (Read-only)</h2>
-          <p>Auto-generated from baseline. These are ideal workflow step dates/windows and cannot be edited.</p>
+          <h2>2) Workflow Plan And Progress</h2>
+          <p>See each workflow step window and deadline, enter actual completion dates, and track variance in one place.</p>
         </header>
         <div class="card-body">
           <div id="idealSummary" class="timeline-item"></div>
           <div id="idealPhaseBars" class="phase-list"></div>
-          <div id="idealMilestoneTable"></div>
+          <div id="workflowTrackerTable"></div>
         </div>
-      </article>
-    </section>
-
-    <section class="grid">
-      <article class="card full">
-        <header class="card-header">
-          <h2>3) Actual Progress Updates</h2>
-          <p>Only update actual workflow step completion dates here. Future dates are blocked.</p>
-        </header>
-        <div class="card-body" id="actualMilestoneTable"></div>
       </article>
     </section>
 
@@ -172,7 +162,7 @@
           <details class="advanced-panel">
             <summary>Open advanced settings</summary>
             <div class="form-grid advanced-grid">
-              <label class="check-row"><input id="useBusinessDays" type="checkbox" /> Use business days in date offsets</label>
+              <label class="check-row"><input id="useBusinessDays" type="checkbox" /> Use business days in date offsets (UK bank holidays + Christmas shutdown excluded)</label>
               <label class="check-row"><input id="showInterviewClient" type="checkbox" checked /> Show interview date in client view</label>
             </div>
           </details>

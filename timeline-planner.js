@@ -140,14 +140,90 @@ function addDays(date, days) {
   return startOfDay(d);
 }
 
+function easterSunday(year) {
+  const a = year % 19;
+  const b = Math.floor(year / 100);
+  const c = year % 100;
+  const d = Math.floor(b / 4);
+  const e = b % 4;
+  const f = Math.floor((b + 8) / 25);
+  const g = Math.floor((b - f + 1) / 3);
+  const h = (19 * a + b - d - g + 15) % 30;
+  const i = Math.floor(c / 4);
+  const k = c % 4;
+  const l = (32 + 2 * e + 2 * i - h - k) % 7;
+  const m = Math.floor((a + 11 * h + 22 * l) / 451);
+  const month = Math.floor((h + l - 7 * m + 114) / 31);
+  const day = ((h + l - 7 * m + 114) % 31) + 1;
+  return startOfDay(new Date(year, month - 1, day));
+}
+
+function firstWeekdayOfMonth(year, month, weekday) {
+  let d = startOfDay(new Date(year, month, 1));
+  while (d.getDay() !== weekday) d = addDays(d, 1);
+  return d;
+}
+
+function lastWeekdayOfMonth(year, month, weekday) {
+  let d = startOfDay(new Date(year, month + 1, 0));
+  while (d.getDay() !== weekday) d = addDays(d, -1);
+  return d;
+}
+
+function observedFixedHoliday(year, month, day, taken) {
+  let d = startOfDay(new Date(year, month, day));
+  if (d.getDay() === 6) d = addDays(d, 2);
+  else if (d.getDay() === 0) d = addDays(d, 1);
+  while (taken.has(toIso(d)) || d.getDay() === 0 || d.getDay() === 6) {
+    d = addDays(d, 1);
+  }
+  taken.add(toIso(d));
+  return d;
+}
+
+const ukNonWorkingCache = new Map();
+
+function ukNonWorkingDaysForYear(year) {
+  if (ukNonWorkingCache.has(year)) return ukNonWorkingCache.get(year);
+  const days = new Set();
+  const takenObserved = new Set();
+
+  const add = (d) => days.add(toIso(d));
+
+  add(observedFixedHoliday(year, 0, 1, takenObserved)); // New Year's Day
+  const easter = easterSunday(year);
+  add(addDays(easter, -2)); // Good Friday
+  add(addDays(easter, 1)); // Easter Monday
+  add(firstWeekdayOfMonth(year, 4, 1)); // Early May bank holiday (first Monday in May)
+  add(lastWeekdayOfMonth(year, 4, 1)); // Spring bank holiday (last Monday in May)
+  add(lastWeekdayOfMonth(year, 7, 1)); // Summer bank holiday (last Monday in August)
+  add(observedFixedHoliday(year, 11, 25, takenObserved)); // Christmas Day
+  add(observedFixedHoliday(year, 11, 26, takenObserved)); // Boxing Day
+
+  // Office shutdown: days between Christmas and New Year are non-working.
+  for (let day = 27; day <= 31; day += 1) {
+    const d = startOfDay(new Date(year, 11, day));
+    if (d.getDay() !== 0 && d.getDay() !== 6) add(d);
+  }
+
+  ukNonWorkingCache.set(year, days);
+  return days;
+}
+
+function isUkWorkingDay(date) {
+  const d = startOfDay(date);
+  const dow = d.getDay();
+  if (dow === 0 || dow === 6) return false;
+  return !ukNonWorkingDaysForYear(d.getFullYear()).has(toIso(d));
+}
+
 function addBusinessDays(date, days) {
   const d = new Date(date);
   const direction = days >= 0 ? 1 : -1;
   let remaining = Math.abs(days);
   while (remaining > 0) {
     d.setDate(d.getDate() + direction);
-    const dow = d.getDay();
-    if (dow !== 0 && dow !== 6) remaining -= 1;
+    if (isUkWorkingDay(d)) remaining -= 1;
   }
   return startOfDay(d);
 }
@@ -293,17 +369,17 @@ function activeContractEndDate(c) {
 function computeIdealTimeline(c) {
   const ko = parseDate(c.baseline.kickoffDate);
   if (!ko) return;
-  const useBusinessDays = c.settings.useBusinessDays;
   const week1Start = nextMondayAfterKoWeek(ko);
   const week1End = addDays(week1Start, 6);
   const week2End = addDays(week1Start, 13);
 
   const productionStart = ko;
-  const productionEnd = addOffset(ko, 29, useBusinessDays);
-  const promotionStart = addOffset(productionEnd, 1, useBusinessDays);
-  const promotionEnd = addOffset(promotionStart, 44, useBusinessDays);
-  const reportingStart = addOffset(promotionEnd, 1, useBusinessDays);
-  const reportingEnd = addOffset(reportingStart, 14, useBusinessDays);
+  // Phase timing is always based on UK working days.
+  const productionEnd = addBusinessDays(ko, 29);
+  const promotionStart = addBusinessDays(productionEnd, 1);
+  const promotionEnd = addBusinessDays(promotionStart, 44);
+  const reportingStart = addBusinessDays(promotionEnd, 1);
+  const reportingEnd = addBusinessDays(reportingStart, 14);
 
   c.idealTimeline.phaseWindows.production = { start: toIso(productionStart), end: toIso(productionEnd) };
   c.idealTimeline.phaseWindows.promotion = { start: toIso(promotionStart), end: toIso(promotionEnd) };
@@ -335,8 +411,9 @@ function computePolicyLayer(c, now = new Date()) {
   const ko = parseDate(c.baseline.kickoffDate);
   if (!ko) return;
 
-  const day30 = addOffset(ko, 30, c.settings.useBusinessDays);
-  const day90 = addOffset(ko, 90, c.settings.useBusinessDays);
+  // Policy checkpoints follow the same UK working-day calendar adjustments.
+  const day30 = addBusinessDays(ko, 30);
+  const day90 = addBusinessDays(ko, 90);
 
   c.policyLayer.firstPublishByDay30Deadline = toIso(day30);
   c.policyLayer.publishReadyWeekDeadline = formatWc(day30);
@@ -371,7 +448,13 @@ function phaseDurationDays(c, phaseName) {
   const start = parseDate(phase.start);
   const end = parseDate(phase.end);
   if (!start || !end) return 0;
-  return Math.max(0, diffDays(start, end) + 1);
+  let count = 0;
+  let cursor = startOfDay(start);
+  while (cursor <= end) {
+    if (isUkWorkingDay(cursor)) count += 1;
+    cursor = addDays(cursor, 1);
+  }
+  return count;
 }
 
 function computeProjectedMilestones(c) {
@@ -584,7 +667,7 @@ function phaseRangeText(phase) {
 function renderIdealTimeline() {
   const summary = document.getElementById("idealSummary");
   const bars = document.getElementById("idealPhaseBars");
-  const table = document.getElementById("idealMilestoneTable");
+  const table = document.getElementById("workflowTrackerTable");
 
   if (!campaign.baseline.locked) {
     summary.textContent = "Lock baseline dates to generate the ideal timeline.";
@@ -630,84 +713,28 @@ function renderIdealTimeline() {
     promoting: `${formatWc(campaign.idealTimeline.phaseWindows.promotion.start)} to ${formatWc(campaign.idealTimeline.phaseWindows.promotion.end)}`,
     reporting: formatWc(campaign.idealTimeline.milestonePlan.reporting)
   };
+  const today = todayIso();
 
   table.innerHTML = `
     <table class="milestone-table">
       <thead>
-        <tr><th>Workflow step</th><th>Ideal date (read-only)</th><th>Ideal window</th></tr>
+        <tr><th>Workflow step</th><th>Ideal window</th><th>Deadline</th><th>Actual completion date</th><th>Variance</th></tr>
       </thead>
       <tbody>
         ${milestoneOrder.map((key) => `
           <tr>
             <td>${milestoneLabels[key]}</td>
-            <td>${formatDate(campaign.idealTimeline.milestonePlan[key])}</td>
             <td>${windowHints[key] || ""}</td>
+            <td>${formatDate(campaign.idealTimeline.milestonePlan[key])}</td>
+            <td>${
+              key === "kickoff"
+                ? `<span class="status-meta">From baseline KO: ${formatDate(campaign.baseline.kickoffDate)}</span>`
+                : `<input type="date" data-actual="${key}" max="${today}" value="${campaign.actuals.milestoneActual[key] || ""}" ${campaign.baseline.locked ? "" : "disabled"} />`
+            }</td>
+            <td>${key === "kickoff" ? "-" : renderVariance(campaign.idealTimeline.milestonePlan[key], campaign.actuals.milestoneActual[key])}</td>
           </tr>
         `).join("")}
       </tbody>
-    </table>
-  `;
-}
-
-function setImpactSummary(milestoneKey, oldValue, newValue, before, after) {
-  if (!oldValue && !newValue) {
-    campaign.ui.lastImpact = null;
-    return;
-  }
-
-  const beforePublish = parseDate(before.projectedPublishDate);
-  const afterPublish = parseDate(after.projectedPublishDate);
-  const beforeReport = parseDate(before.projectedReportDate);
-  const afterReport = parseDate(after.projectedReportDate);
-
-  const publishDelta = beforePublish && afterPublish ? diffDays(beforePublish, afterPublish) : null;
-  const reportDelta = beforeReport && afterReport ? diffDays(beforeReport, afterReport) : null;
-  const promoDelta = after.projectedPromotionDays - before.projectedPromotionDays;
-
-  const shiftLines = [];
-  if (publishDelta !== null && publishDelta !== 0) {
-    shiftLines.push(`Projected publishing moved ${publishDelta > 0 ? `later by ${publishDelta}` : `earlier by ${Math.abs(publishDelta)}`} day(s).`);
-  }
-  if (reportDelta !== null && reportDelta !== 0) {
-    shiftLines.push(`Projected reporting moved ${reportDelta > 0 ? `later by ${reportDelta}` : `earlier by ${Math.abs(reportDelta)}`} day(s).`);
-  }
-  if (promoDelta !== 0) {
-    shiftLines.push(`Projected promotion window ${promoDelta > 0 ? `increased by ${promoDelta}` : `reduced by ${Math.abs(promoDelta)}`} day(s).`);
-  }
-  if (before.feasible !== after.feasible) {
-    shiftLines.push(after.feasible ? "Timeline moved back to feasible." : "Timeline is now no longer feasible.");
-  }
-
-  campaign.ui.lastImpact = {
-    milestone: milestoneLabels[milestoneKey] || milestoneKey,
-    oldValue,
-    newValue,
-    lines: shiftLines.length ? shiftLines : ["No downstream shift detected."]
-  };
-}
-
-function renderActualProgress() {
-  const table = document.getElementById("actualMilestoneTable");
-  const today = todayIso();
-  const rows = milestoneOrder.map((key) => `
-    <tr>
-      <td>${milestoneLabels[key]}</td>
-      <td>${formatDate(campaign.idealTimeline.milestonePlan[key])}</td>
-      <td>${
-        key === "kickoff"
-          ? `<span class="status-meta">From baseline KO: ${formatDate(campaign.baseline.kickoffDate)}</span>`
-          : `<input type="date" data-actual="${key}" max="${today}" value="${campaign.actuals.milestoneActual[key] || ""}" ${campaign.baseline.locked ? "" : "disabled"} />`
-      }</td>
-      <td>${key === "kickoff" ? "-" : renderVariance(campaign.idealTimeline.milestonePlan[key], campaign.actuals.milestoneActual[key])}</td>
-    </tr>
-  `).join("");
-
-  table.innerHTML = `
-    <table class="milestone-table">
-      <thead>
-        <tr><th>Workflow step</th><th>Ideal date/window</th><th>Actual completion date</th><th>Variance</th></tr>
-      </thead>
-      <tbody>${rows}</tbody>
     </table>
   `;
 
@@ -747,6 +774,43 @@ function renderActualProgress() {
       render();
     });
   });
+}
+
+function setImpactSummary(milestoneKey, oldValue, newValue, before, after) {
+  if (!oldValue && !newValue) {
+    campaign.ui.lastImpact = null;
+    return;
+  }
+
+  const beforePublish = parseDate(before.projectedPublishDate);
+  const afterPublish = parseDate(after.projectedPublishDate);
+  const beforeReport = parseDate(before.projectedReportDate);
+  const afterReport = parseDate(after.projectedReportDate);
+
+  const publishDelta = beforePublish && afterPublish ? diffDays(beforePublish, afterPublish) : null;
+  const reportDelta = beforeReport && afterReport ? diffDays(beforeReport, afterReport) : null;
+  const promoDelta = after.projectedPromotionDays - before.projectedPromotionDays;
+
+  const shiftLines = [];
+  if (publishDelta !== null && publishDelta !== 0) {
+    shiftLines.push(`Projected publishing moved ${publishDelta > 0 ? `later by ${publishDelta}` : `earlier by ${Math.abs(publishDelta)}`} day(s).`);
+  }
+  if (reportDelta !== null && reportDelta !== 0) {
+    shiftLines.push(`Projected reporting moved ${reportDelta > 0 ? `later by ${reportDelta}` : `earlier by ${Math.abs(reportDelta)}`} day(s).`);
+  }
+  if (promoDelta !== 0) {
+    shiftLines.push(`Projected promotion window ${promoDelta > 0 ? `increased by ${promoDelta}` : `reduced by ${Math.abs(promoDelta)}`} day(s).`);
+  }
+  if (before.feasible !== after.feasible) {
+    shiftLines.push(after.feasible ? "Timeline moved back to feasible." : "Timeline is now no longer feasible.");
+  }
+
+  campaign.ui.lastImpact = {
+    milestone: milestoneLabels[milestoneKey] || milestoneKey,
+    oldValue,
+    newValue,
+    lines: shiftLines.length ? shiftLines : ["No downstream shift detected."]
+  };
 }
 
 function renderVariance(idealIso, actualIso) {
@@ -799,7 +863,6 @@ function renderTimelineVisual(viewMode, hostId) {
   points.sort((a, b) => a.date - b.date);
   const min = addDays(points[0].date, -3);
   const max = addDays(points[points.length - 1].date, 3);
-  const span = Math.max(1, diffDays(min, max));
 
   const width = Math.max(1100, host.clientWidth || 1100);
   const height = 430;
@@ -834,20 +897,68 @@ function renderTimelineVisual(viewMode, hostId) {
     ];
   const laneTaskEnd = laneTaskStart + (flowRows.length * rowGap);
   const timelineBottom = laneTaskEnd + 18;
+  const chartStart = min;
+  const chartEnd = max;
+  const weekdaySlots = [];
+  let dayCursor = startOfDay(chartStart);
+  while (dayCursor <= chartEnd) {
+    if (dayCursor.getDay() !== 0 && dayCursor.getDay() !== 6) {
+      weekdaySlots.push(toIso(dayCursor));
+    }
+    dayCursor = addDays(dayCursor, 1);
+  }
+  if (!weekdaySlots.length) {
+    host.innerHTML = '<div class="status-meta">No weekday timeline points available.</div>';
+    return;
+  }
+  const weekdayIndex = new Map(weekdaySlots.map((iso, idx) => [iso, idx]));
+  const slotCount = weekdaySlots.length;
+  const slotWidth = (width - left - right) / Math.max(1, slotCount);
+  const firstWeekday = parseDate(weekdaySlots[0]);
+  const lastWeekday = parseDate(weekdaySlots[weekdaySlots.length - 1]);
 
-  const xOf = (d) => left + (diffDays(min, d) / span) * (width - left - right);
+  const snapToWeekday = (date) => {
+    let d = startOfDay(date);
+    while (d.getDay() === 0 || d.getDay() === 6) d = addDays(d, 1);
+    if (d > chartEnd) {
+      d = startOfDay(date);
+      while (d.getDay() === 0 || d.getDay() === 6) d = addDays(d, -1);
+    }
+    return d;
+  };
+
+  const indexOfDate = (date) => {
+    const snapped = snapToWeekday(date);
+    const idx = weekdayIndex.get(toIso(snapped));
+    if (typeof idx === "number") return idx;
+    if (firstWeekday && snapped < firstWeekday) return 0;
+    if (lastWeekday && snapped > lastWeekday) return slotCount - 1;
+    return 0;
+  };
+
+  const xOf = (d) => left + ((indexOfDate(d) + 0.5) * slotWidth);
+  const xStartOf = (d) => left + (indexOfDate(d) * slotWidth);
+  const xEndOf = (d) => left + ((indexOfDate(d) + 1) * slotWidth);
+  const weekStartX = (d) => xStartOf(weekStartMonday(d));
+  const weekEndX = (d) => xEndOf(addDays(weekStartMonday(d), 4));
 
   const weekLines = [];
   const today = startOfDay(new Date());
   const ko = parseDate(campaign.baseline.kickoffDate);
   const week1Start = ko ? nextMondayAfterKoWeek(ko) : null;
   const koWeekStart = week1Start ? addDays(week1Start, -7) : null;
-  const totalWeeks = Math.ceil(span / 7);
+  const totalWeeks = Math.ceil(slotCount / 5);
   const labelEvery = totalWeeks > 16 ? 4 : totalWeeks > 10 ? 2 : 1;
   let weekIndex = 0;
-  let cursor = weekStartMonday(min);
-  while (cursor <= max) {
-    const x = xOf(cursor);
+  let cursor = weekStartMonday(chartStart);
+  while (cursor <= chartEnd) {
+    const monday = startOfDay(cursor);
+    const mondayIdx = weekdayIndex.get(toIso(monday));
+    if (typeof mondayIdx !== "number") {
+      cursor = addDays(cursor, 7);
+      continue;
+    }
+    const x = left + (mondayIdx * slotWidth);
     const isCurrentWeek = weekStartMonday(today).getTime() === cursor.getTime();
     let weekLabel = "";
     if (week1Start) {
@@ -860,19 +971,22 @@ function renderTimelineVisual(viewMode, hostId) {
     }
     weekLines.push(`<line class="${isCurrentWeek ? "vis-week-line vis-week-current" : "vis-week-line"}" x1="${x}" y1="34" x2="${x}" y2="${timelineBottom + 8}"/>`);
     if (weekLabel && weekIndex % labelEvery === 0) {
-      weekLines.push(`<text class="vis-week-label" x="${x}" y="20" text-anchor="middle">${weekLabel}</text>`);
+      weekLines.push(`<text class="vis-week-label" x="${x + (2.5 * slotWidth)}" y="20" text-anchor="middle">${weekLabel}</text>`);
     }
     cursor = addDays(cursor, 7);
     weekIndex += 1;
   }
 
   const phaseBands = [];
+  let phaseCursorX = left;
   const addPhaseBand = (start, end, cls, label) => {
     if (!start || !end) return;
-    const x1 = xOf(start);
-    const x2 = xOf(end);
-    const w = Math.max(2, x2 - x1);
-    phaseBands.push(`<rect class="${cls}" x="${x1}" y="48" width="${w}" height="${timelineBottom - 40}" rx="8" ry="8"/>`);
+    let x1 = weekStartX(start);
+    let x2 = weekEndX(end);
+    x1 = Math.max(x1, phaseCursorX);
+    x2 = Math.max(x2, x1 + 2);
+    phaseCursorX = x2;
+    phaseBands.push(`<rect class="${cls}" x="${x1}" y="48" width="${x2 - x1}" height="${timelineBottom - 40}" rx="8" ry="8"/>`);
     phaseBands.push(`<text class="vis-text vis-band-label" x="${x1 + 8}" y="64">${label}</text>`);
   };
   addPhaseBand(prodStart, prodEnd, "vis-phase-prod-band", `Production (${phaseDurationDays(campaign, "production")}d)`);
@@ -886,8 +1000,8 @@ function renderTimelineVisual(viewMode, hostId) {
       const start = parseDate(campaign.idealTimeline.milestonePlan[item.start]);
       const end = parseDate(campaign.idealTimeline.milestonePlan[item.end]);
       if (!start || !end) return;
-      const x1 = xOf(start);
-      const x2 = xOf(end);
+      const x1 = xStartOf(start);
+      const x2 = xEndOf(end);
       const w = Math.max(6, x2 - x1);
       rowObjects.push(`<rect class="vis-task" x="${x1}" y="${y}" width="${w}" height="12" rx="6" ry="6"/>`);
       rowObjects.push(`<text class="vis-bar-label" x="${Math.min(x2 + 6, width - right - 6)}" y="${y + 10}">${item.label}</text>`);
@@ -1245,7 +1359,6 @@ function render() {
   writeCampaignToForm();
   recomputeAll(campaign);
   renderIdealTimeline();
-  renderActualProgress();
   renderTimelineVisual("client", "timelineVisualClient");
   renderTimelineVisual("internal", "timelineVisualInternal");
   renderTimelineList("client", "timelineViewClient");
