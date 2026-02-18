@@ -151,15 +151,18 @@ const impactBuckets = [
 
 const neutralCauseOptions = [
   "We haven’t received sign-off or feedback on the content plan we sent on [date].",
+  "We haven’t received a client response/sign-off by the agreed deadline.",
   "We haven’t received feedback on the draft we shared on [date].",
   "We don’t yet have confirmation of SME availability.",
+  "We haven’t received interview booking confirmation by the agreed deadline.",
   "We haven’t been able to schedule the SME interview yet.",
   "No content is ready to publish by day 30.",
   "Not all content is ready to publish by day 60.",
   "No content has been published by day 60.",
   "Not all content is ready to publish by day 90.",
   "No content is ready to publish by day 90.",
-  "We are now 120 days into the campaign without all content published."
+  "We are now 120 days into the campaign without all content published.",
+  "We haven’t received a commercial decision by the agreed 5 working day deadline."
 ];
 
 const guidedFields = document.getElementById("guidedFields");

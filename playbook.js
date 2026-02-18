@@ -27,12 +27,12 @@ const triggers = [
       "Risk to promotion window"
     ],
     actions: [
-      { text: "CSM asks for a decision within 10 working days or promotion window will begin to shrink", roles: ["CSM"] },
+      { text: "CSM asks for a decision within 5 working days or promotion window will begin to shrink", roles: ["CSM"] },
       { text: "Provide time commitment (50 minutes) and interview format", roles: ["CSM"] },
       { text: "Email client after KO/planning call", roles: ["CSM"] },
       { text: "Reiterate time commitment and format", roles: ["CSM"] },
       { text: "Explain impact of delay", roles: ["CSM"] },
-      { text: "Provide clear decision deadline (10 days)", roles: ["CSM"] },
+      { text: "Provide clear decision deadline (5 working days)", roles: ["CSM"] },
       { text: "Raise alternatives such as articles only/written interview", roles: [] }
     ]
   },
@@ -228,6 +228,71 @@ const timeline = [
   }
 ];
 
+function responseGateTimelineOption(title) {
+  const lower = title.toLowerCase();
+  const base = {
+    label: "Waiting on client response/sign-off",
+    trigger: "Client response/sign-off not received by deadline",
+    status: "At Risk",
+    impact: [
+      "Campaign cannot fully progress until client response is received.",
+      "Publication is delayed and promotion window may shorten."
+    ],
+    actions: [
+      { text: "Send client response/sign-off request with a clear 5 working day deadline", roles: ["CSM"] },
+      { text: "If unresolved by the 5 working day deadline, move to Behind and update timeline with client decision required", roles: ["CSM"] },
+      { text: "If response is received and blockers are cleared, status can improve at the next checkpoint", roles: [] }
+    ]
+  };
+  if (lower.includes("day 60") || lower.includes("day 90")) {
+    return {
+      ...base,
+      impact: [
+        "Campaign cannot fully progress until client response is received.",
+        "Remaining content will not receive full promotion if delay continues.",
+        "Reporting depth and performance are at risk."
+      ]
+    };
+  }
+  if (lower.includes("day 120") || lower.includes("6 month")) {
+    return {
+      ...base,
+      status: "On Hold",
+      impact: [
+        "Campaign remains paused pending client decision.",
+        "Work cannot progress without harming on-track campaigns."
+      ],
+      actions: [
+        { text: "Send commercial decision request with a clear 5 working day deadline", roles: ["CSM", "AM"] },
+        { text: "If unresolved by the 5 working day deadline, keep On Hold/Behind and escalate via AM", roles: ["AM"] },
+        { text: "If response is received and blockers are cleared, status can improve at the next checkpoint", roles: [] }
+      ]
+    };
+  }
+  return base;
+}
+
+const normalizedTimeline = timeline.map((item) => {
+  const options = item.options
+    ? [...item.options]
+    : [{
+      label: "Primary checkpoint condition",
+      trigger: item.trigger,
+      status: item.status,
+      impact: item.impact,
+      actions: item.actions
+    }];
+
+  if (!options.some((option) => option.label === "Waiting on client response/sign-off")) {
+    options.push(responseGateTimelineOption(item.title));
+  }
+
+  return {
+    ...item,
+    options
+  };
+});
+
 const roleFilter = document.getElementById("roleFilter");
 const statusBar = document.getElementById("statusBar");
 const searchInput = document.getElementById("searchInput");
@@ -303,7 +368,7 @@ function renderTimeline() {
   const role = roleFilter.value;
   const status = statusState;
 
-  timeline.forEach(item => {
+  normalizedTimeline.forEach(item => {
     const wrapper = document.createElement("div");
     wrapper.className = "timeline-item";
 
