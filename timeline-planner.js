@@ -238,7 +238,9 @@ function addOffset(date, days, useBusinessDays) {
 
 function diffDays(a, b) {
   const oneDay = 1000 * 60 * 60 * 24;
-  return Math.floor((startOfDay(b) - startOfDay(a)) / oneDay);
+  const aUtc = Date.UTC(a.getFullYear(), a.getMonth(), a.getDate());
+  const bUtc = Date.UTC(b.getFullYear(), b.getMonth(), b.getDate());
+  return Math.floor((bUtc - aUtc) / oneDay);
 }
 
 function weekStartMonday(date) {
@@ -381,12 +383,13 @@ function computeIdealTimeline(c) {
   const week2End = addDays(week1Start, 13);
 
   const productionStart = ko;
-  // Phase timing is always based on UK working days.
-  const productionEnd = addBusinessDays(ko, 29);
-  const promotionStart = addBusinessDays(productionEnd, 1);
-  const promotionEnd = addBusinessDays(promotionStart, 44);
-  const reportingStart = addBusinessDays(promotionEnd, 1);
-  const reportingEnd = addBusinessDays(reportingStart, 14);
+  // Phase timing rules:
+  // Production (creation) = 30 calendar days, Promotion = 45 calendar days, Reporting = 10 working days.
+  const productionEnd = addDays(ko, 29);
+  const promotionStart = addDays(productionEnd, 1);
+  const promotionEnd = addDays(promotionStart, 44);
+  const reportingStart = addDays(promotionEnd, 1);
+  const reportingEnd = addBusinessDays(reportingStart, 9);
 
   c.idealTimeline.phaseWindows.production = { start: toIso(productionStart), end: toIso(productionEnd) };
   c.idealTimeline.phaseWindows.promotion = { start: toIso(promotionStart), end: toIso(promotionEnd) };
@@ -418,9 +421,9 @@ function computePolicyLayer(c, now = new Date()) {
   const ko = parseDate(c.baseline.kickoffDate);
   if (!ko) return;
 
-  // Policy checkpoints follow the same UK working-day calendar adjustments.
-  const day30 = addBusinessDays(ko, 30);
-  const day90 = addBusinessDays(ko, 90);
+  // Policy checkpoints use fixed calendar-day offsets (no holiday allowances).
+  const day30 = addDays(ko, 30);
+  const day90 = addDays(ko, 90);
 
   c.policyLayer.firstPublishByDay30Deadline = toIso(day30);
   c.policyLayer.reportShareByDay90Deadline = toIso(day90);
@@ -456,6 +459,9 @@ function phaseDurationDays(c, phaseName) {
   const start = parseDate(phase.start);
   const end = parseDate(phase.end);
   if (!start || !end) return 0;
+  if (phaseName === "production" || phaseName === "promotion") {
+    return Math.max(0, diffDays(start, end) + 1);
+  }
   let count = 0;
   let cursor = startOfDay(start);
   while (cursor <= end) {
@@ -503,6 +509,20 @@ function computeProjectedMilestones(c) {
     projected[key] = toIso(shifted > idealDate ? shifted : idealDate);
   }
 
+  // Projected promotion window rule:
+  // if promotion would run past the ideal promotion deadline, cap it to 30 calendar days.
+  const projectedPublish = parseDate(projected.publishing);
+  const projectedPromoting = parseDate(projected.promoting);
+  const idealPromotionDeadline = parseDate(ideal.promoting);
+  if (projectedPublish && projectedPromoting && idealPromotionDeadline && projectedPromoting > idealPromotionDeadline) {
+    projected.promoting = toIso(addDays(projectedPublish, 29));
+    // Keep reporting aligned to capped promotion end (10 working days reporting window).
+    const cappedPromoting = parseDate(projected.promoting);
+    if (cappedPromoting) {
+      projected.reporting = toIso(addBusinessDays(cappedPromoting, 10));
+    }
+  }
+
   return projected;
 }
 
@@ -522,6 +542,7 @@ function computeDerived(c, now = new Date()) {
     derived.feasible = false;
     derived.feasibilityReason = "Set contract end date and enough actuals to project publishing date.";
   } else {
+    // Promotion-day feasibility uses inclusive calendar days (weekends included).
     const promotionDays = Math.max(0, diffDays(projectedPublish, activeEnd) + 1);
     derived.projectedPromotionDays = promotionDays;
     derived.feasible = promotionDays >= 30;
@@ -809,10 +830,13 @@ function renderProjectedTimeline() {
     Projected reporting window: <strong>${phaseRangeText(rep)}</strong>
   `;
 
-  const projDays = (phase) => {
+  const projDays = (phase, phaseName) => {
     const s = parseDate(phase.start);
     const e = parseDate(phase.end);
     if (!s || !e) return 0;
+    if (phaseName === "production" || phaseName === "promotion") {
+      return Math.max(0, diffDays(s, e) + 1);
+    }
     let c = 0;
     let cursor = startOfDay(s);
     while (cursor <= e) {
@@ -823,15 +847,15 @@ function renderProjectedTimeline() {
   };
 
   const phaseRows = [
-    { name: "Production", window: prod, days: projDays(prod) },
-    { name: "Promotion", window: prom, days: projDays(prom) },
-    { name: "Reporting", window: rep, days: projDays(rep) }
+    { name: "Production", window: prod, days: projDays(prod, "production"), unit: "calendar days" },
+    { name: "Promotion", window: prom, days: projDays(prom, "promotion"), unit: "calendar days" },
+    { name: "Reporting", window: rep, days: projDays(rep, "reporting"), unit: "working days" }
   ];
 
   bars.innerHTML = phaseRows.map((row) => `
     <div class="phase-row">
       <div class="phase-name">${row.name}</div>
-      <div class="phase-bar-wrap"><div class="phase-bar">${row.days} working days (${phaseRangeText(row.window)})</div></div>
+      <div class="phase-bar-wrap"><div class="phase-bar">${row.days} ${row.unit} (${phaseRangeText(row.window)})</div></div>
     </div>
   `).join("");
 
@@ -935,6 +959,9 @@ function renderTimelineVisual(viewMode, hostId) {
 
   const policyDate = parseDate(campaign.policyLayer.firstPublishByDay30Deadline);
   const policyDay90Date = parseDate(campaign.policyLayer.reportShareByDay90Deadline);
+  const contractStart = parseDate(campaign.baseline.contractStartDate);
+  const contractEnd = parseDate(campaign.baseline.contractEndDate);
+  const contractExtensionEnd = campaign.baseline.extension30Days ? parseDate(campaign.derived.activeContractEndDate) : null;
   const revised = parseDate(campaign.derived.projectedPublishDate);
   const showProjected = Boolean(campaign.settings.showProjectedOnCharts);
   const showLag = campaign.settings.showLagOnCharts !== false;
@@ -950,6 +977,9 @@ function renderTimelineVisual(viewMode, hostId) {
     if (d) points.push({ key: "phase", type: "anchor", date: d });
   });
   if (policyDate) points.push({ key: "policy", type: "anchor", date: policyDate });
+  if (contractStart) points.push({ key: "contractStart", type: "anchor", date: contractStart });
+  if (contractEnd) points.push({ key: "contractEnd", type: "anchor", date: contractEnd });
+  if (contractExtensionEnd) points.push({ key: "contractExtensionEnd", type: "anchor", date: contractExtensionEnd });
   if (revised) points.push({ key: "projected", type: "anchor", date: revised });
 
   if (!points.length) {
@@ -1038,6 +1068,11 @@ function renderTimelineVisual(viewMode, hostId) {
   const xEndOf = (d) => left + ((indexOfDate(d) + 1) * slotWidth);
   const weekStartX = (d) => xStartOf(weekStartMonday(d));
   const weekEndX = (d) => xEndOf(addDays(weekStartMonday(d), 4));
+  const phaseClassForStep = (stepKey) => {
+    if (stepKey === "reporting") return "vis-step-rep";
+    if (stepKey === "promoting" || stepKey === "publishing") return "vis-step-prom";
+    return "vis-step-prod";
+  };
 
   const weekLines = [];
   const today = startOfDay(new Date());
@@ -1115,7 +1150,7 @@ function renderTimelineVisual(viewMode, hostId) {
         const x1 = xStartOf(barStart);
         const x2 = xEndOf(barEnd);
         const w = Math.max(2, x2 - x1);
-        monthBars.push(`<rect class="${monthIdx % 2 === 0 ? "vis-month-band-a" : "vis-month-band-b"}" x="${x1}" y="${monthRowY}" width="${w}" height="${monthRowHeight}" rx="4" ry="4"/>`);
+        monthBars.push(`<rect class="vis-month-band-${monthIdx % 5}" x="${x1}" y="${monthRowY}" width="${w}" height="${monthRowHeight}" rx="4" ry="4"/>`);
         const label = barStart.toLocaleDateString(undefined, { month: "short" });
         monthBars.push(`<text class="vis-month-label" x="${x1 + (w / 2)}" y="${monthRowY + 11}" text-anchor="middle">${label}</text>`);
       }
@@ -1141,18 +1176,19 @@ function renderTimelineVisual(viewMode, hostId) {
       const x1 = xStartOf(start);
       const x2 = xEndOf(planEnd);
       const maxXParts = [x2];
+      const stepPhaseClass = phaseClassForStep(item.key);
 
       if (showProjected) {
         const pEnd = parseDate(projectedMilestones[item.key] || campaign.idealTimeline.milestonePlan[item.key]);
         if (pEnd) {
           const px2 = xEndOf(pEnd);
-          projectedParts.push(`<rect class="vis-projected-bar" x="${x1}" y="${y + 1}" width="${Math.max(6, px2 - x1)}" height="10" rx="5" ry="5"/>`);
+          projectedParts.push(`<rect class="vis-task ${stepPhaseClass}" x="${x1}" y="${y}" width="${Math.max(6, px2 - x1)}" height="12" rx="6" ry="6"/>`);
           maxXParts.push(px2);
         }
       }
 
       if (showIdeal) {
-        rowObjects.push(`<rect class="vis-task" x="${x1}" y="${y}" width="${Math.max(6, x2 - x1)}" height="12" rx="6" ry="6"/>`);
+        rowObjects.push(`<rect class="vis-task ${stepPhaseClass}" x="${x1}" y="${y}" width="${Math.max(6, x2 - x1)}" height="12" rx="6" ry="6"/>`);
         rowObjects.push(`<rect class="vis-plan-node" x="${xOf(planEnd) - 4}" y="${y}" width="10" height="12" rx="3" ry="3"/>`);
         maxXParts.push(xOf(planEnd));
       }
@@ -1180,7 +1216,9 @@ function renderTimelineVisual(viewMode, hostId) {
       }
 
       const labelX = Math.min(Math.max(...maxXParts) + 8, width - right - 6);
-      rowObjects.push(`<text class="vis-bar-label" x="${labelX}" y="${y + 10}">${item.label}</text>`);
+      if (showIdeal || showProjected) {
+        rowObjects.push(`<text class="vis-bar-label" x="${labelX}" y="${y + 10}">${item.label}</text>`);
+      }
 
       if (viewMode === "internal" && rowLag) {
         const badgeW = Math.max(32, rowLag.length * 7 + 10);
@@ -1199,18 +1237,24 @@ function renderTimelineVisual(viewMode, hostId) {
       const x1 = xStartOf(start);
       const x2 = xEndOf(end);
       const w = Math.max(6, x2 - x1);
+      const stepPhaseClass = phaseClassForStep(item.end);
+      let labelAnchorX = x2;
       if (showProjected) {
         const pStart = parseDate(projectedMilestones[item.start] || campaign.idealTimeline.milestonePlan[item.start]);
         const pEnd = parseDate(projectedMilestones[item.end] || campaign.idealTimeline.milestonePlan[item.end]);
         if (pStart && pEnd) {
           const px1 = xStartOf(pStart);
           const px2 = xEndOf(pEnd);
-          projectedParts.push(`<rect class="vis-projected-bar" x="${px1}" y="${y + 1}" width="${Math.max(6, px2 - px1)}" height="10" rx="5" ry="5"/>`);
+          projectedParts.push(`<rect class="vis-task ${stepPhaseClass}" x="${px1}" y="${y}" width="${Math.max(6, px2 - px1)}" height="12" rx="6" ry="6"/>`);
+          labelAnchorX = px2;
         }
       }
       if (showIdeal) {
-        rowObjects.push(`<rect class="vis-task" x="${x1}" y="${y}" width="${w}" height="12" rx="6" ry="6"/>`);
-        rowObjects.push(`<text class="vis-bar-label" x="${Math.min(x2 + 6, width - right - 6)}" y="${y + 10}">${item.label}</text>`);
+        rowObjects.push(`<rect class="vis-task ${stepPhaseClass}" x="${x1}" y="${y}" width="${w}" height="12" rx="6" ry="6"/>`);
+        labelAnchorX = x2;
+      }
+      if (showIdeal || showProjected) {
+        rowObjects.push(`<text class="vis-bar-label" x="${Math.min(labelAnchorX + 6, width - right - 6)}" y="${y + 10}">${item.label}</text>`);
       }
 
       const actualEnd = parseDate(campaign.actuals.milestoneActual[item.end]);
@@ -1241,6 +1285,7 @@ function renderTimelineVisual(viewMode, hostId) {
     const plan = parseDate(campaign.idealTimeline.milestonePlan[item.key]);
     const actual = parseDate(campaign.actuals.milestoneActual[item.key]);
     const projectedForStep = parseDate(projectedMilestones[item.key]);
+    const stepPhaseClass = phaseClassForStep(item.key);
     const labelX = Math.min(
       Math.max(plan ? xOf(plan) : 0, actual ? xOf(actual) : 0) + 8,
       width - right - 6
@@ -1248,7 +1293,7 @@ function renderTimelineVisual(viewMode, hostId) {
     if (showProjected && projectedForStep) {
       const px1 = xStartOf(projectedForStep) + (slotWidth * 0.1);
       const pw = Math.max(6, slotWidth * 0.8);
-      projectedParts.push(`<rect class="vis-projected-bar" x="${px1}" y="${y + 1}" width="${pw}" height="10" rx="5" ry="5"/>`);
+      projectedParts.push(`<rect class="vis-task ${stepPhaseClass}" x="${px1}" y="${y}" width="${pw}" height="12" rx="6" ry="6"/>`);
     }
     if (showIdeal && plan) rowObjects.push(`<rect class="vis-plan-node" x="${xOf(plan) - 4}" y="${y}" width="10" height="12" rx="3" ry="3"/>`);
     if (actual) rowObjects.push(`<rect class="vis-actual-node" x="${xOf(actual) - 4}" y="${y}" width="10" height="12" rx="3" ry="3"/>`);
@@ -1285,19 +1330,36 @@ function renderTimelineVisual(viewMode, hostId) {
   const policyDay90Line = policyDay90Date
     ? `<line class="vis-policy-90" x1="${xOf(policyDay90Date)}" y1="34" x2="${xOf(policyDay90Date)}" y2="${timelineBottom + 8}"/>`
     : "";
+  const contractStartLine = contractStart
+    ? `<line class="vis-contract-start" x1="${xOf(contractStart)}" y1="34" x2="${xOf(contractStart)}" y2="${timelineBottom + 8}"/>`
+    : "";
+  const contractEndLine = contractEnd
+    ? `<line class="vis-contract-end" x1="${xOf(contractEnd)}" y1="34" x2="${xOf(contractEnd)}" y2="${timelineBottom + 8}"/>`
+    : "";
+  const contractExtensionLine = contractExtensionEnd
+    ? `<line class="vis-contract-extension" x1="${xOf(contractExtensionEnd)}" y1="34" x2="${xOf(contractExtensionEnd)}" y2="${timelineBottom + 8}"/>`
+    : "";
 
   const projectedLine = revised
     ? `<line class="vis-revised" x1="${xOf(revised)}" y1="34" x2="${xOf(revised)}" y2="${timelineBottom + 8}"/>`
     : "";
 
+  const contractVisuals = `${contractStartLine}${contractEndLine}${contractExtensionLine}`;
   const policyVisuals = viewMode === "internal" ? `${policyLine}${policyDay90Line}${showProjected ? projectedLine : ""}` : "";
   const internalKeyItems = viewMode === "internal"
     ? `
+      <span><span class="key-line key-contract-start"></span>Contract start</span>
+      <span><span class="key-line key-contract-end"></span>Contract end</span>
+      ${contractExtensionEnd ? '<span><span class="key-line key-contract-extension"></span>Contract extension end</span>' : ""}
       <span><span class="key-line key-policy"></span>Policy Day 30</span>
       <span><span class="key-line key-policy-90"></span>Policy Day 90</span>
       ${showProjected ? '<span><span class="key-line key-projected"></span>Projected publish</span><span><span class="key-swatch key-projected-bar"></span>Projected step bar</span>' : ""}
     `
-    : "";
+    : `
+      <span><span class="key-line key-contract-start"></span>Contract start</span>
+      <span><span class="key-line key-contract-end"></span>Contract end</span>
+      ${contractExtensionEnd ? '<span><span class="key-line key-contract-extension"></span>Contract extension end</span>' : ""}
+    `;
 
   host.innerHTML = `
     <div class="timeline-range">${formatDate(min)} -> ${formatDate(max)}</div>
@@ -1308,6 +1370,7 @@ function renderTimelineVisual(viewMode, hostId) {
       <line class="vis-lane" x1="${left}" y1="${laneTaskStart}" x2="${width - right}" y2="${laneTaskStart}"/>
       <line class="vis-lane" x1="${left}" y1="${laneTaskEnd}" x2="${width - right}" y2="${laneTaskEnd}"/>
       ${rowGroups.join("")}
+      ${contractVisuals}
       ${monthBars.join("")}
       ${policyVisuals}
     </svg>

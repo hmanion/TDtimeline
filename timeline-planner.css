@@ -309,6 +309,22 @@
   border-top-style: dashed;
 }
 
+.key-contract-start {
+  border-top-color: #2a7a2f;
+  border-top-width: 3px;
+}
+
+.key-contract-end {
+  border-top-color: #7a1f1f;
+  border-top-width: 3px;
+}
+
+.key-contract-extension {
+  border-top-color: #7a1f1f;
+  border-top-width: 3px;
+  border-top-style: dashed;
+}
+
 .key-week {
   border-top-color: rgba(63, 69, 95, 0.45);
 }
@@ -358,6 +374,22 @@
   stroke-width: 2;
 }
 
+.vis-contract-start {
+  stroke: #2a7a2f;
+  stroke-width: 3;
+}
+
+.vis-contract-end {
+  stroke: #7a1f1f;
+  stroke-width: 3;
+}
+
+.vis-contract-extension {
+  stroke: #7a1f1f;
+  stroke-width: 3;
+  stroke-dasharray: 8 5;
+}
+
 .vis-phase-prod-band {
   fill: rgba(48, 144, 139, 0.18);
 }
@@ -376,16 +408,27 @@
   stroke-width: 1.2;
 }
 
+.vis-step-prod {
+  fill: rgba(48, 144, 139, 0.38);
+  stroke: rgba(30, 102, 98, 0.95);
+}
+
+.vis-step-prom {
+  fill: rgba(230, 133, 46, 0.38);
+  stroke: rgba(170, 92, 21, 0.95);
+}
+
+.vis-step-rep {
+  fill: rgba(66, 74, 97, 0.34);
+  stroke: rgba(41, 47, 67, 0.92);
+}
+
 .vis-plan-node {
   fill: #30908b;
 }
 
 .vis-actual-node {
   fill: #1b1c37;
-}
-
-.vis-projected-bar {
-  fill: rgba(112, 118, 138, 0.34);
 }
 
 .vis-plan-dot {
@@ -459,13 +502,11 @@
   font-family: "Montserrat", sans-serif;
 }
 
-.vis-month-band-a {
-  fill: rgba(63, 69, 95, 0.1);
-}
-
-.vis-month-band-b {
-  fill: rgba(63, 69, 95, 0.16);
-}
+.vis-month-band-0 { fill: rgba(48, 144, 139, 0.22); }
+.vis-month-band-1 { fill: rgba(230, 133, 46, 0.22); }
+.vis-month-band-2 { fill: rgba(66, 74, 97, 0.2); }
+.vis-month-band-3 { fill: rgba(107, 76, 154, 0.2); }
+.vis-month-band-4 { fill: rgba(180, 87, 87, 0.2); }
 
 .vis-month-label {
   fill: #1f2538;
