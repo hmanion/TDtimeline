@@ -60,6 +60,7 @@ const defaultCampaign = {
     publishReadyWeekDeadline: "",
     reportShareWeekDeadline: "",
     firstPublishByDay30Deadline: "",
+    reportShareByDay90Deadline: "",
     policyMissedPermanent: false,
     policyMissedAt: "",
     policyMissReason: ""
@@ -93,7 +94,6 @@ const defaultCampaign = {
     showInterviewClient: true,
     showProjectedOnCharts: false,
     showLagOnCharts: true,
-    showIdealOnCharts: true,
     chartInternalView: false
   },
   revisions: [],
@@ -270,7 +270,6 @@ function migrateToV2(parsed) {
   migrated.settings.showInterviewClient = parsed.settings?.showInterviewClient !== false;
   migrated.settings.showProjectedOnCharts = Boolean(parsed.settings?.showProjectedOnCharts);
   migrated.settings.showLagOnCharts = parsed.settings?.showLagOnCharts !== false;
-  migrated.settings.showIdealOnCharts = parsed.settings?.showIdealOnCharts !== false;
   migrated.settings.chartInternalView = Boolean(parsed.settings?.chartInternalView);
 
   if (parsed.schemaVersion === 2 && parsed.baseline && parsed.idealTimeline && parsed.actuals) {
@@ -424,6 +423,7 @@ function computePolicyLayer(c, now = new Date()) {
   const day90 = addBusinessDays(ko, 90);
 
   c.policyLayer.firstPublishByDay30Deadline = toIso(day30);
+  c.policyLayer.reportShareByDay90Deadline = toIso(day90);
   c.policyLayer.publishReadyWeekDeadline = formatWc(day30);
   c.policyLayer.reportShareWeekDeadline = formatWc(day90);
 
@@ -934,10 +934,11 @@ function renderTimelineVisual(viewMode, hostId) {
   });
 
   const policyDate = parseDate(campaign.policyLayer.firstPublishByDay30Deadline);
+  const policyDay90Date = parseDate(campaign.policyLayer.reportShareByDay90Deadline);
   const revised = parseDate(campaign.derived.projectedPublishDate);
   const showProjected = Boolean(campaign.settings.showProjectedOnCharts);
   const showLag = campaign.settings.showLagOnCharts !== false;
-  const showIdeal = campaign.settings.showIdealOnCharts !== false;
+  const showIdeal = !showProjected;
   const projectedMilestones = campaign.derived.projectedMilestones || {};
   const prodStart = parseDate(campaign.idealTimeline.phaseWindows.production.start);
   const prodEnd = parseDate(campaign.idealTimeline.phaseWindows.production.end);
@@ -992,7 +993,9 @@ function renderTimelineVisual(viewMode, hostId) {
       { type: "milestone", label: "Reporting", key: "reporting" }
     ];
   const laneTaskEnd = laneTaskStart + (flowRows.length * rowGap);
-  const timelineBottom = laneTaskEnd + 18;
+  const monthRowY = laneTaskEnd + 10;
+  const monthRowHeight = 14;
+  const timelineBottom = monthRowY + monthRowHeight + 10;
   const chartStart = min;
   const chartEnd = max;
   const weekdaySlots = [];
@@ -1043,8 +1046,6 @@ function renderTimelineVisual(viewMode, hostId) {
   const ko = parseDate(campaign.baseline.kickoffDate);
   const week1Start = ko ? nextMondayAfterKoWeek(ko) : null;
   const koWeekStart = week1Start ? addDays(week1Start, -7) : null;
-  const totalWeeks = Math.ceil(slotCount / 5);
-  const labelEvery = totalWeeks > 16 ? 4 : totalWeeks > 10 ? 2 : 1;
   let weekIndex = 0;
   let cursor = weekStartMonday(chartStart);
   while (cursor <= chartEnd) {
@@ -1066,7 +1067,7 @@ function renderTimelineVisual(viewMode, hostId) {
       }
     }
     weekLines.push(`<line class="${isCurrentWeek ? "vis-week-line vis-week-current" : "vis-week-line"}" x1="${x}" y1="34" x2="${x}" y2="${timelineBottom + 8}"/>`);
-    if (weekLabel && weekIndex % labelEvery === 0) {
+    if (weekLabel) {
       weekLines.push(`<text class="vis-week-label" x="${x + (2.5 * slotWidth)}" y="20" text-anchor="middle">${weekLabel}</text>`);
     }
     cursor = addDays(cursor, 7);
@@ -1089,6 +1090,40 @@ function renderTimelineVisual(viewMode, hostId) {
     addPhaseBand(prodStart, prodEnd, "vis-phase-prod-band", `Production (${phaseDurationDays(campaign, "production")}d)`);
     addPhaseBand(promStart, promEnd, "vis-phase-prom-band", `Promotion (${phaseDurationDays(campaign, "promotion")}d)`);
     addPhaseBand(repStart, repEnd, "vis-phase-rep-band", `Reporting (${phaseDurationDays(campaign, "reporting")}d)`);
+  }
+
+  const firstWeekdayInMonth = (d) => {
+    let cursor = startOfDay(d);
+    while (cursor.getDay() === 0 || cursor.getDay() === 6) cursor = addDays(cursor, 1);
+    return cursor;
+  };
+  const lastWeekdayInMonth = (d) => {
+    let cursor = startOfDay(d);
+    while (cursor.getDay() === 0 || cursor.getDay() === 6) cursor = addDays(cursor, -1);
+    return cursor;
+  };
+  const monthBars = [];
+  if (firstWeekday && lastWeekday) {
+    let monthCursor = startOfDay(new Date(firstWeekday.getFullYear(), firstWeekday.getMonth(), 1));
+    let monthIdx = 0;
+    while (monthCursor <= lastWeekday) {
+      const monthStart = new Date(monthCursor.getFullYear(), monthCursor.getMonth(), 1);
+      const monthEnd = new Date(monthCursor.getFullYear(), monthCursor.getMonth() + 1, 0);
+      const visibleStart = monthStart < firstWeekday ? firstWeekday : monthStart;
+      const visibleEnd = monthEnd > lastWeekday ? lastWeekday : monthEnd;
+      const barStart = firstWeekdayInMonth(visibleStart);
+      const barEnd = lastWeekdayInMonth(visibleEnd);
+      if (barStart <= barEnd) {
+        const x1 = xStartOf(barStart);
+        const x2 = xEndOf(barEnd);
+        const w = Math.max(2, x2 - x1);
+        monthBars.push(`<rect class="${monthIdx % 2 === 0 ? "vis-month-band-a" : "vis-month-band-b"}" x="${x1}" y="${monthRowY}" width="${w}" height="${monthRowHeight}" rx="4" ry="4"/>`);
+        const label = barStart.toLocaleDateString(undefined, { month: "short" });
+        monthBars.push(`<text class="vis-month-label" x="${x1 + (w / 2)}" y="${monthRowY + 11}" text-anchor="middle">${label}</text>`);
+      }
+      monthCursor = new Date(monthCursor.getFullYear(), monthCursor.getMonth() + 1, 1);
+      monthIdx += 1;
+    }
   }
 
   const rowGroups = [];
@@ -1188,15 +1223,19 @@ function renderTimelineVisual(viewMode, hostId) {
   const policyLine = policyDate
     ? `<line class="vis-policy" x1="${xOf(policyDate)}" y1="34" x2="${xOf(policyDate)}" y2="${timelineBottom + 8}"/>`
     : "";
+  const policyDay90Line = policyDay90Date
+    ? `<line class="vis-policy-90" x1="${xOf(policyDay90Date)}" y1="34" x2="${xOf(policyDay90Date)}" y2="${timelineBottom + 8}"/>`
+    : "";
 
   const projectedLine = revised
     ? `<line class="vis-revised" x1="${xOf(revised)}" y1="34" x2="${xOf(revised)}" y2="${timelineBottom + 8}"/>`
     : "";
 
-  const policyVisuals = viewMode === "internal" ? `${showIdeal ? policyLine : ""}${showProjected ? projectedLine : ""}` : "";
+  const policyVisuals = viewMode === "internal" ? `${policyLine}${policyDay90Line}${showProjected ? projectedLine : ""}` : "";
   const internalKeyItems = viewMode === "internal"
     ? `
-      ${showIdeal ? '<span><span class="key-line key-policy"></span>Policy Day 30</span>' : ""}
+      <span><span class="key-line key-policy"></span>Policy Day 30</span>
+      <span><span class="key-line key-policy-90"></span>Policy Day 90</span>
       ${showProjected ? '<span><span class="key-line key-projected"></span>Projected publish</span><span><span class="key-swatch key-projected-bar"></span>Projected step bar</span>' : ""}
     `
     : "";
@@ -1210,6 +1249,7 @@ function renderTimelineVisual(viewMode, hostId) {
       <line class="vis-lane" x1="${left}" y1="${laneTaskStart}" x2="${width - right}" y2="${laneTaskStart}"/>
       <line class="vis-lane" x1="${left}" y1="${laneTaskEnd}" x2="${width - right}" y2="${laneTaskEnd}"/>
       ${rowGroups.join("")}
+      ${monthBars.join("")}
       ${policyVisuals}
     </svg>
     <div class="timeline-key">
@@ -1338,7 +1378,6 @@ function writeCampaignToForm() {
   document.getElementById("showInterviewClient").checked = campaign.settings.showInterviewClient;
   document.getElementById("showProjectedOnCharts").checked = campaign.settings.showProjectedOnCharts;
   document.getElementById("showLagOnCharts").checked = campaign.settings.showLagOnCharts !== false;
-  document.getElementById("showIdealOnCharts").checked = campaign.settings.showIdealOnCharts !== false;
   document.getElementById("chartInternalView").checked = Boolean(campaign.settings.chartInternalView);
 
   renderBaselineCard();
@@ -1350,7 +1389,6 @@ function readFormToCampaign() {
   campaign.settings.showInterviewClient = document.getElementById("showInterviewClient").checked;
   campaign.settings.showProjectedOnCharts = document.getElementById("showProjectedOnCharts").checked;
   campaign.settings.showLagOnCharts = document.getElementById("showLagOnCharts").checked;
-  campaign.settings.showIdealOnCharts = document.getElementById("showIdealOnCharts").checked;
   campaign.settings.chartInternalView = document.getElementById("chartInternalView").checked;
 
   if (!campaign.baseline.locked) {
@@ -1567,7 +1605,7 @@ function runAcceptanceTests() {
 }
 
 function bindEvents() {
-  document.querySelectorAll("#campaignName,#contractStartDate,#contractEndDate,#kickoffDate,#extension30Days,#extensionApprovedDate,#liveStage,#useBusinessDays,#showInterviewClient,#showProjectedOnCharts,#showLagOnCharts,#showIdealOnCharts,#chartInternalView")
+  document.querySelectorAll("#campaignName,#contractStartDate,#contractEndDate,#kickoffDate,#extension30Days,#extensionApprovedDate,#liveStage,#useBusinessDays,#showInterviewClient,#showProjectedOnCharts,#showLagOnCharts,#chartInternalView")
     .forEach((el) => {
       el.addEventListener("change", () => {
         readFormToCampaign();

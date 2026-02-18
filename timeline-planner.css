@@ -299,6 +299,11 @@
   border-top-style: dashed;
 }
 
+.key-policy-90 {
+  border-top-color: #a02872;
+  border-top-style: dashed;
+}
+
 .key-projected {
   border-top-color: #e6852e;
   border-top-style: dashed;
@@ -344,6 +349,12 @@
 .vis-revised {
   stroke: #e6852e;
   stroke-dasharray: 4 3;
+  stroke-width: 2;
+}
+
+.vis-policy-90 {
+  stroke: #a02872;
+  stroke-dasharray: 5 4;
   stroke-width: 2;
 }
 
@@ -443,6 +454,21 @@
 
 .vis-lag-badge-text {
   fill: #2a3148;
+  font-size: 10px;
+  font-weight: 700;
+  font-family: "Montserrat", sans-serif;
+}
+
+.vis-month-band-a {
+  fill: rgba(63, 69, 95, 0.1);
+}
+
+.vis-month-band-b {
+  fill: rgba(63, 69, 95, 0.16);
+}
+
+.vis-month-label {
+  fill: #1f2538;
   font-size: 10px;
   font-weight: 700;
   font-family: "Montserrat", sans-serif;
