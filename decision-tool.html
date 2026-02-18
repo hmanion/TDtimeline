@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Campaign Decision Tool</title>
+  <title>Campaign Timeline Health</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -17,16 +17,36 @@
         <img src="TodayDigital_Icon.png" alt="Today Digital" class="logo" />
         <div>
           <p class="eyebrow">Interactive Playbook</p>
-          <h1>Campaign Decision Tool</h1>
+          <h1>Campaign Timeline Health</h1>
           <p class="subtitle">Answer one checkpoint question at a time to get a clear status and next step.</p>
         </div>
       </div>
       <div class="nav-links">
-        <a href="index.html" class="nav-link">Timeline Playbook</a>
+        <a href="index.html" class="nav-link">Timeline Health</a>
+        <a href="timeline-planner.html" class="nav-link">Timeline Planner</a>
         <a href="comms.html" class="nav-link">Comms Plan</a>
-        <a href="decision-tool.html" class="nav-link active">Decision Tool</a>
+        <a href="decision-tool.html" class="nav-link active">Timeline Health</a>
       </div>
     </header>
+
+    <section class="grid">
+      <article class="card full">
+        <header class="card-header">
+          <h2>Campaign Timing</h2>
+          <p>Set Kick-off date (Day 0) to calculate where the campaign should be now.</p>
+        </header>
+        <div class="card-body">
+          <div class="ko-planner">
+            <label for="koDateInput">Kick-off date (Day 0)</label>
+            <div class="ko-controls">
+              <input id="koDateInput" type="date" />
+              <button id="jumpSuggested" class="ghost" type="button">Jump to suggested checkpoint</button>
+            </div>
+            <p id="koContext" class="ko-context">Add a Kick-off date to see where the campaign should be today.</p>
+          </div>
+        </div>
+      </article>
+    </section>
 
     <section class="decision-layout">
       <article class="card decision-rail">
@@ -45,15 +65,6 @@
         </header>
 
         <div class="card-body">
-          <div class="ko-planner">
-            <label for="koDateInput">Kick-off date (Day 0)</label>
-            <div class="ko-controls">
-              <input id="koDateInput" type="date" />
-              <button id="jumpSuggested" class="ghost" type="button">Jump to suggested checkpoint</button>
-            </div>
-            <p id="koContext" class="ko-context">Add a Kick-off date to see where the campaign should be today.</p>
-          </div>
-
           <div id="optionsContainer" class="options-grid"></div>
 
           <div id="resultCard" class="result-card hidden">

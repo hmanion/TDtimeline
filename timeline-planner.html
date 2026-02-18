@@ -1,0 +1,207 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Campaign Timeline Planner</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="playbook.css" />
+  <link rel="stylesheet" href="timeline-planner.css" />
+</head>
+<body>
+  <div class="page">
+    <header class="hero">
+      <div class="brand">
+        <img src="TodayDigital_Icon.png" alt="Today Digital" class="logo" />
+        <div>
+          <p class="eyebrow">Interactive Playbook</p>
+          <h1>Campaign Timeline Planner</h1>
+          <p class="subtitle">Set a locked baseline, track actual workflow step completion dates, and see feasibility impacts clearly.</p>
+        </div>
+      </div>
+      <div class="nav-links">
+        <a href="index.html" class="nav-link">Timeline Health</a>
+        <a href="timeline-planner.html" class="nav-link active">Timeline Planner</a>
+        <a href="comms.html" class="nav-link">Comms Plan</a>
+      </div>
+    </header>
+
+    <section class="grid">
+      <article class="card full">
+        <header class="card-header">
+          <h2>1) Baseline Setup (Locked)</h2>
+          <p>Enter contracted dates and KO once, then lock them. These dates drive the ideal timeline.</p>
+        </header>
+        <div class="card-body form-grid">
+          <label>Campaign name
+            <input id="campaignName" type="text" placeholder="Q1 Leadership Campaign" />
+          </label>
+          <label>Contract start date (required)
+            <input id="contractStartDate" type="date" />
+          </label>
+          <label>Contract end date (required)
+            <input id="contractEndDate" type="date" />
+          </label>
+          <label>Kick-off call date (required)
+            <input id="kickoffDate" type="date" />
+          </label>
+          <label class="check-row"><input id="extension30Days" type="checkbox" /> Apply 30-day extension</label>
+          <label>Extension approved date (optional)
+            <input id="extensionApprovedDate" type="date" />
+          </label>
+        </div>
+        <div class="card-body actions-row">
+          <button id="lockBaseline" class="primary-link" type="button">Lock baseline</button>
+          <button id="unlockBaseline" class="ghost" type="button">Unlock baseline</button>
+          <span id="baselineLockState" class="save-hint"></span>
+        </div>
+      </article>
+    </section>
+
+    <section class="grid">
+      <article class="card full">
+        <header class="card-header">
+          <h2>2) Workflow Plan And Progress</h2>
+          <p>See each workflow step window and deadline, enter actual completion dates, and track variance in one place.</p>
+        </header>
+        <div class="card-body">
+          <div id="idealSummary" class="timeline-item"></div>
+          <div id="idealPhaseBars" class="phase-list"></div>
+          <div id="workflowTrackerTable"></div>
+        </div>
+      </article>
+    </section>
+
+    <section class="grid">
+      <article class="card full">
+        <header class="card-header">
+          <h2>Timeline Preview (Gantt)</h2>
+          <p>Full-width phase bands for Production, Promotion, and Reporting, with workflow timing and completion markers.</p>
+        </header>
+        <div class="card-body">
+          <div class="chart-controls">
+            <label class="toggle-row"><span class="switch"><input id="chartInternalView" type="checkbox" /><span class="slider"></span></span><span>Internal chart view</span></label>
+            <label class="toggle-row"><span class="switch"><input id="showLagOnCharts" type="checkbox" checked /><span class="slider"></span></span><span>Show lag on chart</span></label>
+            <label class="toggle-row"><span class="switch"><input id="showProjectedOnCharts" type="checkbox" /><span class="slider"></span></span><span>Projected timeline view (off = ideal)</span></label>
+          </div>
+          <div id="timelineVisualMain" class="timeline-visual"></div>
+          <div class="timeline-actions">
+            <button id="downloadMainChart" class="ghost" type="button">Download chart image</button>
+          </div>
+        </div>
+      </article>
+    </section>
+
+    <section class="grid">
+      <article class="card full">
+        <header class="card-header">
+          <h2>3) Projected Timeline (From Actuals)</h2>
+          <p>Based on the actual dates entered so far, this shows the likely timeline if current pace continues.</p>
+        </header>
+        <div class="card-body">
+          <div id="projectedSummary" class="timeline-item"></div>
+          <div id="projectedPhaseBars" class="phase-list"></div>
+          <div id="projectedTrackerTable"></div>
+        </div>
+      </article>
+    </section>
+
+    <section class="grid planner-grid">
+      <article class="card">
+        <header class="card-header">
+          <h2>4) Impact + Feasibility</h2>
+          <p>See campaign viability, policy status, and latest timeline impact.</p>
+        </header>
+        <div class="card-body">
+          <div id="feasibilityBanner" class="feasibility-banner"></div>
+          <div id="statusCards" class="status-cards"></div>
+          <div class="impact-wrap">
+            <h3 class="mini-title">Latest Impact</h3>
+            <div id="impactSummary"></div>
+          </div>
+        </div>
+      </article>
+
+      <article class="card">
+        <header class="card-header">
+          <h2>Next CSM Actions</h2>
+          <p>Clear actions based on current campaign position.</p>
+        </header>
+        <div class="card-body">
+          <label>Current campaign stage
+            <select id="liveStage"></select>
+          </label>
+          <div id="primaryAction" class="primary-action"></div>
+          <ul id="csmActions" class="rec-list"></ul>
+        </div>
+      </article>
+    </section>
+
+    <section class="grid">
+      <article class="card full">
+        <header class="card-header">
+          <h2>Outputs</h2>
+          <p>Export baseline + ideal + actual timeline data, or capture a revision snapshot.</p>
+        </header>
+        <div class="card-body actions-row">
+          <button id="createRevision" class="primary-link" type="button">Create revision snapshot</button>
+          <button id="resetPlanner" class="ghost" type="button">Clear planner</button>
+          <button id="exportJson" class="ghost" type="button">Export JSON</button>
+          <button id="exportCsv" class="ghost" type="button">Export CSV</button>
+          <span id="saveHint" class="save-hint"></span>
+        </div>
+      </article>
+    </section>
+
+    <section class="grid">
+      <article class="card full">
+        <header class="card-header">
+          <h2>Revisions</h2>
+          <p>Snapshots preserve baseline, policy, and projected state over time.</p>
+        </header>
+        <div class="card-body" id="revisionsList"></div>
+      </article>
+    </section>
+
+    <section class="grid">
+      <article class="card full">
+        <header class="card-header">
+          <h2>Team Defaults</h2>
+          <p>Advanced settings for admins. Most CSMs can keep defaults.</p>
+        </header>
+        <div class="card-body">
+          <details class="advanced-panel">
+            <summary>Open advanced settings</summary>
+            <div class="form-grid advanced-grid">
+              <label class="check-row"><input id="useBusinessDays" type="checkbox" /> Use business days in date offsets (UK bank holidays + Christmas shutdown excluded)</label>
+              <label class="check-row"><input id="showInterviewClient" type="checkbox" checked /> Show interview date in client view</label>
+            </div>
+          </details>
+        </div>
+      </article>
+    </section>
+
+    <section class="grid">
+      <article class="card full">
+        <header class="card-header">
+          <h2>Admin Validation</h2>
+          <p>Optional acceptance tests for planner integrity.</p>
+        </header>
+        <div class="card-body">
+          <details class="advanced-panel">
+            <summary>Open acceptance test results</summary>
+            <div class="actions-row">
+              <button id="runTests" class="ghost" type="button">Run acceptance tests</button>
+            </div>
+            <div id="testResults">Not run yet.</div>
+          </details>
+        </div>
+      </article>
+    </section>
+  </div>
+
+  <script src="timeline-planner.js"></script>
+</body>
+</html>

@@ -4,16 +4,18 @@ const checkpoints = [
     question: "Can the client name who the SME is?",
     options: [
       {
-        answer: "SME named and confirmed",
+        answer: "Client has confirmed the SME",
         status: "On Track",
         action: "Confirm interview availability windows now.",
         prep: "Draft content plan timeline for Week 1 sign-off."
       },
       {
-        answer: "SME not yet confirmed",
+        answer: "Client has not confirmed the SME",
         status: "At Risk",
-        action: "Send same-day follow-up with a 10 working day deadline, time commitment, and interview format.",
-        prep: "Block placeholder interview slots."
+        action: "Send same-day follow-up with a 5 working day deadline, time commitment, and interview format.",
+        prep: "Block placeholder interview slots.",
+        isResponseGate: true,
+        responseType: "signoff"
       }
     ]
   },
@@ -22,16 +24,24 @@ const checkpoints = [
     question: "Do we have an approved content plan?",
     options: [
       {
-        answer: "Approved",
+        answer: "Content plan is approved",
         status: "On Track",
         action: "Lock interview invite and content production schedule.",
         prep: "Confirm Week 2 booking date."
       },
       {
-        answer: "In edits with clear approval date",
+        answer: "Content plan is in edits and approval date is confirmed",
         status: "At Risk",
         action: "Send impact note and request final sign-off by agreed date.",
         prep: "Draft interview questions."
+      },
+      {
+        answer: "Content plan is in edits and approval date is not confirmed",
+        status: "At Risk",
+        action: "Set a clear 5 working day sign-off deadline with the client.",
+        prep: "Draft interview questions and hold scheduling placeholders.",
+        isResponseGate: true,
+        responseType: "signoff"
       },
       {
         answer: "Not started or no progress",
@@ -46,19 +56,27 @@ const checkpoints = [
     question: "Have we booked the interview?",
     options: [
       {
-        answer: "Booked for this week",
+        answer: "Interview is booked for this week",
         status: "On Track",
         action: "Run interview and move directly into draft creation.",
         prep: "Confirm creator/editor availability for Week 3."
       },
       {
-        answer: "Booked next week or date being finalized",
+        answer: "Interview is booked for next week",
         status: "At Risk",
-        action: "Lock the final interview slot within 2 working days.",
+        action: "Lock the final interview slot within 5 working days.",
         prep: "Make sure content creation can start as soon as the interview is done."
       },
       {
-        answer: "Week 4 or later, or not booked",
+        answer: "Interview is not booked, but booking decision is due within 5 working days",
+        status: "At Risk",
+        action: "Set a clear 5 working day booking deadline with the client.",
+        prep: "Prepare fallback options if booking is still unresolved at the next checkpoint.",
+        isResponseGate: true,
+        responseType: "booking"
+      },
+      {
+        answer: "Interview is booked for Week 4 or later, or no interview date is confirmed",
         status: "Behind",
         action: "Update timeline with shorter promotion period and require client decision by a clear deadline.",
         prep: "Require client decision between compressed plan and reduced scope."
@@ -70,13 +88,13 @@ const checkpoints = [
     question: "Are we able to create the content?",
     options: [
       {
-        answer: "Creation is underway",
+        answer: "Content creation is underway",
         status: "On Track",
         action: "Keep production moving and set internal publish readiness date.",
         prep: "Confirm Week 4 publication requirements are complete."
       },
       {
-        answer: "Partially blocked",
+        answer: "Content creation has started but is blocked",
         status: "At Risk",
         action: "Clear blockers within 2 working days and prioritize minimum publishable assets.",
         prep: "Pre-book publication slot."
@@ -94,19 +112,19 @@ const checkpoints = [
     question: "Can we publish the content?",
     options: [
       {
-        answer: "Ready to publish this week",
+        answer: "Content is approved and ready to publish this week",
         status: "On Track",
         action: "Publish and start full promotion window.",
         prep: "Verify Day 30 publish/readiness evidence is logged."
       },
       {
-        answer: "Near-ready, publish expected next week",
+        answer: "Content is in final review and expected to publish next week",
         status: "At Risk",
         action: "Push for approval within 5 working days to protect promotion quality.",
         prep: "Prepare Day 30 status update."
       },
       {
-        answer: "Not publish-ready or no clear date",
+        answer: "Content is not approved and no publish date is confirmed",
         status: "Behind",
         action: "Update timeline, require client decision on reduced promotion window, and confirm benchmark impact.",
         prep: "Prepare Day 30 behind-status communication and updated forecast."
@@ -118,19 +136,19 @@ const checkpoints = [
     question: "Is content ready to publish by Day 30?",
     options: [
       {
-        answer: "Content is ready or already published",
+        answer: "Content is approved and ready to publish, or already published",
         status: "On Track",
         action: "Continue full promotion execution.",
         prep: "Map remaining assets against Day 60 full publication plan."
       },
       {
-        answer: "Not yet live, but ready with locked publish in 5 working days",
+        answer: "Content is approved and ready to publish within 5 working days",
         status: "At Risk",
         action: "Fast-track publication and track approvals daily until live.",
         prep: "Identify any Day 60 risks now."
       },
       {
-        answer: "No content ready by Day 30",
+        answer: "No content is approved and ready to publish by Day 30",
         status: "Behind",
         action: "Send impact email, run internal AM/CC unblock review, update timeline, and require client decision on updated plan and reduced promotion window.",
         prep: "Define Day 60 minimum viable publication plan."
@@ -148,13 +166,13 @@ const checkpoints = [
         prep: "Ensure reporting inputs are complete for Day 90."
       },
       {
-        answer: "Some published, and the rest is ready to publish now",
+        answer: "Some content is published, and all remaining content is approved and ready to publish now",
         status: "At Risk",
         action: "Publish remaining content immediately and preserve as much promotion depth as possible.",
         prep: "Confirm everything will be live before Day 90."
       },
       {
-        answer: "Some published, and the rest is not ready",
+        answer: "Some content is published, and some remaining content is not approved or not ready",
         status: "Behind",
         action: "Stop starting new work, request approvals within 5 working days, update timeline, and require client decision on updated plan.",
         prep: "Define Day 90 reporting limitations."
@@ -178,13 +196,13 @@ const checkpoints = [
         prep: "Confirm no extension is needed toward Day 120."
       },
       {
-        answer: "Some published, and the rest is ready to publish now",
+        answer: "Some content is published, and all remaining content is approved and ready to publish now",
         status: "At Risk",
         action: "Publish remaining content immediately and document reporting caveats.",
         prep: "Check if Day 120 extension can be avoided."
       },
       {
-        answer: "Some published, and the rest is not ready",
+        answer: "Some content is published, and some remaining content is not approved or not ready",
         status: "Behind",
         action: "Hold new work, enforce 5-day approval deadline, update timeline, and require client decision on updated plan/scope.",
         prep: "Prepare Day 120 decision options."
@@ -238,13 +256,13 @@ const checkpoints = [
     question: "Is campaign completion still viable without harming on-track campaigns?",
     options: [
       {
-        answer: "Complete or viable plan",
+        answer: "Campaign is complete, or a viable plan is agreed",
         status: "On Track",
         action: "Continue or close per agreed plan.",
         prep: "Confirm 9-month closeout path."
       },
       {
-        answer: "Viable only with reduced scope or accepted tradeoff",
+        answer: "Campaign is viable only if client approves reduced scope or tradeoff",
         status: "Critical",
         action: "Get AM-backed client decision on reduced deliverables and timeline.",
         prep: "Lock 9-month final decision criteria."
@@ -262,7 +280,7 @@ const checkpoints = [
     question: "Is there still a viable path to deliver remaining campaign value?",
     options: [
       {
-        answer: "Completed or viable reduced-scope closeout agreed",
+        answer: "Campaign is completed, or reduced-scope closeout is agreed and viable",
         status: "On Track",
         action: "Execute closeout and finalize reporting narrative.",
         prep: "No further checkpoint action needed."
@@ -283,10 +301,237 @@ const checkpoints = [
   }
 ];
 
+const responseGateDefaults = {
+  "Kick-off": { responseType: "signoff", responseDeadlineWorkingDays: 5 },
+  "Week 1": { responseType: "signoff", responseDeadlineWorkingDays: 5 },
+  "Week 2": { responseType: "booking", responseDeadlineWorkingDays: 5 },
+  "Week 3": { responseType: "approval", responseDeadlineWorkingDays: 5 },
+  "Week 4": { responseType: "approval", responseDeadlineWorkingDays: 5 },
+  "Day 30": { responseType: "approval", responseDeadlineWorkingDays: 5 },
+  "Day 60": { responseType: "approval", responseDeadlineWorkingDays: 5 },
+  "Day 90": { responseType: "approval", responseDeadlineWorkingDays: 5 },
+  "Day 120": { responseType: "commercial_decision", responseDeadlineWorkingDays: 5 },
+  "6-month": { responseType: "commercial_decision", responseDeadlineWorkingDays: 5 },
+  "9-month": { responseType: "commercial_decision", responseDeadlineWorkingDays: 5 }
+};
+
+function responseGateCopy(title) {
+  const base = "Waiting on client response/sign-off";
+  if (title === "Kick-off") {
+    return {
+      answer: base,
+      action: "Request SME confirmation and campaign sign-off within 5 working days.",
+      prep: "If unresolved by the next checkpoint, update timeline and require client decision on reduced promotion window."
+    };
+  }
+  if (title === "Week 2") {
+    return {
+      answer: base,
+      action: "Request interview booking confirmation within 5 working days.",
+      prep: "If unresolved by the next checkpoint, update timeline and require client decision on compressed plan."
+    };
+  }
+  if (title === "Day 120" || title === "6-month" || title === "9-month") {
+    return {
+      answer: base,
+      action: "Request a commercial decision with a clear response deadline.",
+      prep: "If unresolved by the next checkpoint, keep campaign on hold and escalate via AM."
+    };
+  }
+  return {
+    answer: base,
+    action: "Request client response/sign-off with a clear 5 working day deadline.",
+    prep: "If unresolved by the next checkpoint, update timeline and require client decision."
+  };
+}
+
+const responseGateEquivalentAnswersByCheckpoint = {
+  "Kick-off": ["Client has not confirmed the SME"],
+  "Week 1": ["Content plan is in edits and approval date is not confirmed"],
+  "Week 2": ["Interview is not booked, but booking decision is due within 5 working days"],
+  "Day 120": ["No client response by deadline"],
+  "6-month": ["Not viable and decision pending"],
+  "9-month": ["No decision or paused"]
+};
+
+checkpoints.forEach((checkpoint, checkpointIndex) => {
+  const defaults = responseGateDefaults[checkpoint.title] || { responseType: "approval", responseDeadlineWorkingDays: 5 };
+  const equivalentAnswers = responseGateEquivalentAnswersByCheckpoint[checkpoint.title] || [];
+  const existingGateOption = checkpoint.options.find(
+    (option) => option.isResponseGate || equivalentAnswers.includes(option.answer)
+  );
+
+  if (existingGateOption) {
+    existingGateOption.isResponseGate = true;
+    existingGateOption.responseDeadlineWorkingDays = existingGateOption.responseDeadlineWorkingDays || defaults.responseDeadlineWorkingDays;
+    existingGateOption.escalatesAfterCheckpoints = existingGateOption.escalatesAfterCheckpoints ?? 1;
+    existingGateOption.responseType = existingGateOption.responseType || defaults.responseType;
+    existingGateOption.gateCheckpointIndex = checkpointIndex;
+    return;
+  }
+
+  const copy = responseGateCopy(checkpoint.title);
+  checkpoint.options.push({
+    answer: copy.answer,
+    status: "At Risk",
+    action: copy.action,
+    prep: copy.prep,
+    isResponseGate: true,
+    responseDeadlineWorkingDays: defaults.responseDeadlineWorkingDays,
+    escalatesAfterCheckpoints: 1,
+    responseType: defaults.responseType,
+    gateCheckpointIndex: checkpointIndex
+  });
+});
+
+const impactByCheckpointAnswer = {
+  "Kick-off::Client has confirmed the SME": [
+    "Interview scheduling can proceed without timeline risk."
+  ],
+  "Kick-off::Client has not confirmed the SME": [
+    "Won't be able to schedule interview.",
+    "Timeline for drafts will be at risk.",
+    "Risk to promotion window."
+  ],
+  "Week 1::Content plan is approved": [
+    "Campaign can proceed as planned."
+  ],
+  "Week 1::Content plan is in edits and approval date is confirmed": [
+    "Campaign cannot fully progress until sign-off.",
+    "Publication is at risk of delay.",
+    "Promotion window may be shortened."
+  ],
+  "Week 1::Content plan is in edits and approval date is not confirmed": [
+    "Campaign cannot fully progress until sign-off.",
+    "Publication is at risk of delay.",
+    "Promotion window may be shortened."
+  ],
+  "Week 1::Not started or no progress": [
+    "Original timeline is no longer feasible.",
+    "Promotion window is being eaten into and will be shorter."
+  ],
+  "Week 2::Interview is booked for this week": [
+    "Content creation can proceed on schedule."
+  ],
+  "Week 2::Interview is booked for next week": [
+    "Timeline for drafts is at risk.",
+    "Promotion window is at risk."
+  ],
+  "Week 2::Interview is not booked, but booking decision is due within 5 working days": [
+    "Timeline for drafts is at risk.",
+    "Promotion window is at risk."
+  ],
+  "Week 2::Interview is booked for Week 4 or later, or no interview date is confirmed": [
+    "Original timeline is no longer feasible.",
+    "Promotion window is being eaten into and will be shorter."
+  ],
+  "Week 3::Content creation is underway": [
+    "No immediate impact to timeline."
+  ],
+  "Week 3::Content creation has started but is blocked": [
+    "Promotion window is at risk.",
+    "Risk to reach and performance if delays continue."
+  ],
+  "Week 3::Cannot start creation": [
+    "Original timeline is no longer feasible.",
+    "Promotion window is being eaten into and will be shorter."
+  ],
+  "Week 4::Content is approved and ready to publish this week": [
+    "Full promotion window remains achievable."
+  ],
+  "Week 4::Content is in final review and expected to publish next week": [
+    "Promotion window is at risk of shortening.",
+    "Reporting depth may be reduced if delayed further."
+  ],
+  "Week 4::Content is not approved and no publish date is confirmed": [
+    "Promotion window is being eaten into and will be shorter.",
+    "Risk to reach and performance.",
+    "May not hit benchmarks."
+  ],
+  "Day 30::Content is approved and ready to publish, or already published": [
+    "Promotion can continue as planned."
+  ],
+  "Day 30::Content is approved and ready to publish within 5 working days": [
+    "Promotion window is at risk of shortening.",
+    "Risk to reach and performance if delay continues."
+  ],
+  "Day 30::No content is approved and ready to publish by Day 30": [
+    "Promotion window is being eaten into and will be shorter.",
+    "Risk to reach and performance.",
+    "May not hit benchmarks."
+  ],
+  "Day 60::All planned content published": [
+    "No immediate impact to promotion depth."
+  ],
+  "Day 60::Some content is published, and all remaining content is approved and ready to publish now": [
+    "Remaining content promotion depth is at risk if not published immediately.",
+    "Overall campaign reach may reduce if delay continues."
+  ],
+  "Day 60::Some content is published, and some remaining content is not approved or not ready": [
+    "Remaining content will not receive full promotion.",
+    "Overall campaign reach will be reduced."
+  ],
+  "Day 60::No content published": [
+    "Only 30 days left in promotion window.",
+    "Reduced reach and performance.",
+    "Comprehensive report is at risk."
+  ],
+  "Day 90::All planned content published": [
+    "Reporting can run as planned."
+  ],
+  "Day 90::Some content is published, and all remaining content is approved and ready to publish now": [
+    "Reporting depth may be reduced for late-published items."
+  ],
+  "Day 90::Some content is published, and some remaining content is not approved or not ready": [
+    "Not able to promote all content.",
+    "Performance will be below benchmark."
+  ],
+  "Day 90::No content published": [
+    "Promotion is no longer possible.",
+    "Comprehensive report is not viable.",
+    "Will begin to impact other quarters and commitments to other clients."
+  ],
+  "Day 120::Campaign deliverables already completed": [
+    "No extension required."
+  ],
+  "Day 120::Extension decision pending": [
+    "Work remains paused pending a client decision."
+  ],
+  "Day 120::Client sacrifices a future quarter to continue": [
+    "Current campaign continues, but future quarter capacity is reduced."
+  ],
+  "Day 120::Client scraps this quarter": [
+    "Remaining quarter work is stopped and closed."
+  ],
+  "Day 120::No client response by deadline": [
+    "Campaign remains paused and unresolved."
+  ],
+  "6-month::Campaign is complete, or a viable plan is agreed": [
+    "Campaign remains viable without harming on-track campaigns."
+  ],
+  "6-month::Campaign is viable only if client approves reduced scope or tradeoff": [
+    "Campaign completion is no longer achievable without harming on-track campaigns."
+  ],
+  "6-month::Not viable and decision pending": [
+    "Campaign completion is no longer achievable without harming on-track campaigns."
+  ],
+  "9-month::Campaign is completed, or reduced-scope closeout is agreed and viable": [
+    "Remaining value can still be delivered via agreed closeout."
+  ],
+  "9-month::Not viable; closeout or de-scope required": [
+    "Campaign completion is no longer achievable without harming on-track campaigns."
+  ],
+  "9-month::No decision or paused": [
+    "Campaign completion is no longer achievable without harming on-track campaigns."
+  ]
+};
+
 const state = {
   index: 0,
   koDate: null,
-  answers: new Array(checkpoints.length).fill(null)
+  answers: new Array(checkpoints.length).fill(null),
+  highestSeverityReached: "On Track",
+  responseGates: {}
 };
 
 const checkpointRail = document.getElementById("checkpointRail");
@@ -313,6 +558,212 @@ function statusClass(status) {
   if (status === "Critical") return "status-critical";
   if (status === "On Hold" || status === "Expired") return "status-hold";
   return "status-ontrack";
+}
+
+const severityRank = {
+  "On Track": 0,
+  "At Risk": 1,
+  "Behind": 2,
+  "Critical": 3,
+  "On Hold": 4,
+  "Expired": 4,
+  "Complete": 4
+};
+
+function compareSeverity(a, b) {
+  return (severityRank[a] ?? 0) - (severityRank[b] ?? 0);
+}
+
+function gateKey(index) {
+  return String(index);
+}
+
+function ensureResponseGateRecord(index, option) {
+  const key = gateKey(index);
+  if (state.responseGates[key] && !state.responseGates[key].resolved) {
+    return state.responseGates[key];
+  }
+  state.responseGates[key] = {
+    askedDate: "",
+    openedAt: new Date().toISOString(),
+    openedCheckpointIndex: index,
+    deadlineDate: "",
+    resolved: false
+  };
+  return state.responseGates[key];
+}
+
+function parseInputDate(value) {
+  if (!value) return null;
+  const d = new Date(`${value}T00:00:00`);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+function setResponseGateAskedDate(index, option, askedDateValue) {
+  const key = gateKey(index);
+  const gate = ensureResponseGateRecord(index, option);
+  const asked = parseInputDate(askedDateValue);
+  if (!asked) {
+    gate.askedDate = "";
+    gate.deadlineDate = "";
+    return;
+  }
+  const deadline = addWorkingDays(asked, option.responseDeadlineWorkingDays || 5);
+  gate.askedDate = askedDateValue;
+  gate.deadlineDate = deadline.toISOString();
+}
+
+function resolveResponseGate(index) {
+  const key = gateKey(index);
+  if (!state.responseGates[key]) return;
+  state.responseGates[key].resolved = true;
+}
+
+function gateBaseStatus(index, option) {
+  const key = gateKey(index);
+  const gate = state.responseGates[key];
+  const initialStatus = option.gateInitialStatus || option.status || "At Risk";
+  const escalatedStatus = option.gateEscalatedStatus || (initialStatus === "At Risk" ? "Behind" : initialStatus);
+  if (!gate || gate.resolved) return initialStatus;
+  if (gate.deadlineDate) {
+    const today = new Date();
+    const startToday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    const deadline = new Date(gate.deadlineDate);
+    const startDeadline = new Date(deadline.getFullYear(), deadline.getMonth(), deadline.getDate());
+    if (startToday > startDeadline) return escalatedStatus;
+  }
+  const escalatesAfter = option.escalatesAfterCheckpoints ?? 1;
+  const checkpointEscalated = state.index >= (gate.openedCheckpointIndex + escalatesAfter);
+  return checkpointEscalated ? escalatedStatus : initialStatus;
+}
+
+function getSelectedOption(checkpointIndex) {
+  const selectedIndex = state.answers[checkpointIndex];
+  if (selectedIndex === null || selectedIndex === undefined) return null;
+  return checkpoints[checkpointIndex].options[selectedIndex] || null;
+}
+
+function classifyBlockerType(option) {
+  if (option.isResponseGate) return "Client response/sign-off";
+  const text = `${option.action || ""} ${option.prep || ""}`.toLowerCase();
+  if (text.includes("client decision") || text.includes("approval") || text.includes("sign-off")) {
+    return "Client response/sign-off";
+  }
+  return "Internal delivery/process";
+}
+
+function shouldShowDiagnosis(checkpoint, picked) {
+  const isDay30 = checkpoint.title === "Day 30";
+  const isDay90 = checkpoint.title === "Day 90";
+  if (!isDay30 && !isDay90) return false;
+  return picked.status !== "On Track";
+}
+
+function buildHoldupDiagnosis(targetIndex, effectiveStatuses) {
+  const blockers = [];
+  for (let i = 0; i < targetIndex; i += 1) {
+    const option = getSelectedOption(i);
+    if (!option) continue;
+    const status = effectiveStatuses[i];
+    if (compareSeverity(status, "At Risk") < 0) continue;
+    const gate = state.responseGates[gateKey(i)];
+    const askedSuffix = option.isResponseGate && gate?.askedDate
+      ? ` (requested ${formatDeadline(parseInputDate(gate.askedDate))})`
+      : "";
+    blockers.push({
+      checkpoint: checkpoints[i].title,
+      answer: option.answer,
+      status,
+      type: classifyBlockerType(option),
+      askedSuffix
+    });
+  }
+
+  if (!blockers.length) {
+    return {
+      summary: "No earlier checkpoint is currently marked At Risk/Behind/Critical. The hold-up likely occurred at the current checkpoint only.",
+      blockers: []
+    };
+  }
+
+  const clientCount = blockers.filter((b) => b.type === "Client response/sign-off").length;
+  const internalCount = blockers.length - clientCount;
+  return {
+    summary: `Detected ${blockers.length} likely hold-up stage(s): ${clientCount} client response/sign-off, ${internalCount} internal delivery/process.`,
+    blockers
+  };
+}
+
+function rawStatusForCheckpoint(checkpointIndex) {
+  const option = getSelectedOption(checkpointIndex);
+  if (!option) return null;
+  if (option.isResponseGate) return gateBaseStatus(checkpointIndex, option);
+  return option.status;
+}
+
+function computeEffectiveStatuses() {
+  const effective = new Array(checkpoints.length).fill(null);
+  let latest = "On Track";
+  checkpoints.forEach((_, i) => {
+    const raw = rawStatusForCheckpoint(i);
+    if (!raw) return;
+    effective[i] = raw;
+    latest = raw;
+  });
+  state.highestSeverityReached = latest;
+  return effective;
+}
+
+function getImpactLines(checkpointTitle, answer) {
+  if (answer === "Waiting on client response/sign-off") {
+    const lower = checkpointTitle.toLowerCase();
+    if (lower.includes("day 60") || lower.includes("day 90")) {
+      return [
+        "Campaign cannot fully progress until client response is received.",
+        "Publication is delayed and promotion window shortens.",
+        "Reach, performance, and reporting depth are at risk."
+      ];
+    }
+    if (lower.includes("day 120") || lower.includes("6-month") || lower.includes("9-month")) {
+      return [
+        "Campaign remains paused pending client decision.",
+        "Work cannot progress without risking on-track campaigns."
+      ];
+    }
+    return [
+      "Campaign cannot fully progress until client response is received.",
+      "Publication may be delayed.",
+      "Promotion window is at risk of shortening."
+    ];
+  }
+  const key = `${checkpointTitle}::${answer}`;
+  return impactByCheckpointAnswer[key] || ["Impact not specified for this selection."];
+}
+
+function formatGateDeadlineText(option, checkpointIndex) {
+  const gate = ensureResponseGateRecord(checkpointIndex, option);
+  if (!gate.askedDate || !gate.deadlineDate) {
+    return `Request response within ${option.responseDeadlineWorkingDays || 5} working days.`;
+  }
+  const deadline = new Date(gate.deadlineDate);
+  return `Expect client response by ${formatDeadline(deadline)} (${option.responseDeadlineWorkingDays || 5} working days).`;
+}
+
+function gateTrackingText(option, checkpointIndex) {
+  const gate = ensureResponseGateRecord(checkpointIndex, option);
+  if (!gate.askedDate || !gate.deadlineDate) {
+    return `Set the request date below to calculate the ${option.responseDeadlineWorkingDays || 5} working day deadline.`;
+  }
+  const asked = parseInputDate(gate.askedDate);
+  const deadline = new Date(gate.deadlineDate);
+  return `Requested: ${formatDeadline(asked)}. Response due by: ${formatDeadline(deadline)}.`;
+}
+
+function gateEscalationText(option, checkpointIndex) {
+  const escalatesAfter = option.escalatesAfterCheckpoints ?? 1;
+  const nextIndex = Math.min(checkpoints.length - 1, checkpointIndex + escalatesAfter);
+  const nextCheckpoint = checkpoints[nextIndex].title;
+  return `If unresolved by the 5 working day deadline, status moves to Behind. If still unresolved at ${nextCheckpoint}, keep escalating with timeline updates and client decision required.`;
 }
 
 function formatDate(d) {
@@ -447,6 +898,24 @@ function recommendationText(checkpoint, option) {
   return `${checkpoint.title}: ${option.answer}\nStatus: ${option.status}\nWhat to do now: ${action}\nThen: ${prep}`;
 }
 
+function toBulletItems(text) {
+  return String(text)
+    .split(/\.\s+/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => line.endsWith(".") ? line : `${line}.`);
+}
+
+function escalationNotice(status) {
+  if (status === "Critical") {
+    return "AM consultation is required immediately before client comms are sent.";
+  }
+  if (status === "Behind") {
+    return "CSM must align with AM before sending client comms and timeline updates.";
+  }
+  return "";
+}
+
 function campaignDayFromKo(ko) {
   const today = new Date();
   const startToday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
@@ -508,14 +977,16 @@ function renderKoContext() {
 }
 
 function renderRail() {
+  const effectiveStatuses = computeEffectiveStatuses();
   checkpointRail.innerHTML = "";
   checkpoints.forEach((checkpoint, i) => {
     const btn = document.createElement("button");
     btn.className = `rail-item ${i === state.index ? "active" : ""}`;
-    const selected = state.answers[i];
-    const statusText = selected === null
+    const selectedOption = getSelectedOption(i);
+    const status = effectiveStatuses[i];
+    const statusText = selectedOption === null
       ? "Not answered"
-      : `Status: ${checkpoint.options[selected].status}`;
+      : `<span class="badge ${statusClass(status)}">${status}</span>`;
     btn.innerHTML = `
       <div class="rail-item-title">${i + 1}. ${checkpoint.title}</div>
       <div class="rail-item-status">${statusText}</div>
@@ -531,6 +1002,7 @@ function renderRail() {
 function renderCurrent() {
   const checkpoint = checkpoints[state.index];
   const selectedIndex = state.answers[state.index];
+  const effectiveStatuses = computeEffectiveStatuses();
 
   checkpointLabel.textContent = `Checkpoint ${state.index + 1} of ${checkpoints.length}`;
   questionText.textContent = checkpoint.question;
@@ -543,6 +1015,11 @@ function renderCurrent() {
     btn.textContent = option.answer;
     btn.addEventListener("click", () => {
       state.answers[state.index] = i;
+      if (option.isResponseGate) {
+        ensureResponseGateRecord(state.index, option);
+      } else {
+        resolveResponseGate(state.index);
+      }
       render();
     });
     optionsContainer.appendChild(btn);
@@ -552,21 +1029,71 @@ function renderCurrent() {
     resultCard.classList.add("hidden");
   } else {
     const picked = checkpoint.options[selectedIndex];
-    const action = applyTimeDates(picked.action, checkpoint.title);
-    const prep = applyTimeDates(picked.prep, checkpoint.title);
+    const gate = picked.isResponseGate ? ensureResponseGateRecord(state.index, picked) : null;
+    const action = picked.isResponseGate
+      ? `${picked.action} ${formatGateDeadlineText(picked, state.index)}`
+      : applyTimeDates(picked.action, checkpoint.title);
+    const prep = picked.isResponseGate
+      ? gateEscalationText(picked, state.index)
+      : applyTimeDates(picked.prep, checkpoint.title);
+    const impacts = getImpactLines(checkpoint.title, picked.answer);
+    const impactHtml = impacts.map((line) => `<li>${line}</li>`).join("");
+    const actionHtml = toBulletItems(action).map((line) => `<li><strong>${line}</strong></li>`).join("");
+    const effectiveStatus = effectiveStatuses[state.index];
+    const escalationText = escalationNotice(effectiveStatus);
+    const diagnosis = shouldShowDiagnosis(checkpoint, picked)
+      ? buildHoldupDiagnosis(state.index, effectiveStatuses)
+      : null;
+    const diagnosisList = diagnosis
+      ? diagnosis.blockers.map((item) =>
+        `<li><strong>${item.checkpoint}</strong>: ${item.answer} <span class="badge ${statusClass(item.status)}">${item.status}</span><br><span class="diagnosis-meta">${item.type}${item.askedSuffix}</span></li>`
+      ).join("")
+      : "";
     selectedAnswer.textContent = picked.answer;
-    statusBadge.className = `badge ${statusClass(picked.status)}`;
-    statusBadge.textContent = picked.status;
+    statusBadge.className = `badge ${statusClass(effectiveStatus)}`;
+    statusBadge.textContent = effectiveStatus;
     resultAction.innerHTML = `
+      ${picked.isResponseGate ? `
+      <section class="rec-section">
+        <h4 class="rec-title">Client Response Tracking</h4>
+        <label for="gateAskedDateInput" class="ko-label">Date we asked client for response/feedback</label>
+        <input id="gateAskedDateInput" type="date" value="${gate?.askedDate || ""}" />
+        <p class="rec-text">${gateTrackingText(picked, state.index)}</p>
+      </section>
+      ` : ""}
+      ${escalationText ? `
+      <section class="rec-section">
+        <h4 class="rec-title">CSM + AM Alignment</h4>
+        <p class="rec-text"><strong>${escalationText}</strong></p>
+      </section>
+      ` : ""}
+      <section class="rec-section">
+        <h4 class="rec-title">Impact</h4>
+        <ul class="rec-list">${impactHtml}</ul>
+      </section>
       <section class="rec-section">
         <h4 class="rec-title">What To Do Now</h4>
-        <p class="rec-text"><strong>${action}</strong></p>
+        <ul class="rec-list">${actionHtml}</ul>
       </section>
       <section class="rec-section">
         <h4 class="rec-title">Then</h4>
         <p class="rec-text">${prep}</p>
       </section>
+      ${diagnosis ? `
+      <section class="rec-section">
+        <h4 class="rec-title">${checkpoint.title} Hold-up Diagnosis</h4>
+        <p class="rec-text">${diagnosis.summary}</p>
+        ${diagnosis.blockers.length ? `<ul class="rec-list">${diagnosisList}</ul>` : ""}
+      </section>
+      ` : ""}
     `;
+    if (picked.isResponseGate) {
+      const gateAskedDateInput = document.getElementById("gateAskedDateInput");
+      gateAskedDateInput?.addEventListener("change", (event) => {
+        setResponseGateAskedDate(state.index, picked, event.target.value || "");
+        render();
+      });
+    }
     resultCard.classList.remove("hidden");
   }
 
@@ -576,6 +1103,7 @@ function renderCurrent() {
 }
 
 function renderSummary() {
+  const effectiveStatuses = computeEffectiveStatuses();
   summaryList.innerHTML = "";
   checkpoints.forEach((checkpoint, i) => {
     const selected = state.answers[i];
@@ -586,7 +1114,7 @@ function renderSummary() {
       row.innerHTML = `<strong>${checkpoint.title}:</strong> Not answered yet`;
     } else {
       const option = checkpoint.options[selected];
-      row.innerHTML = `<strong>${checkpoint.title}:</strong> ${option.answer} -> <span class="badge ${statusClass(option.status)}">${option.status}</span>`;
+      row.innerHTML = `<strong>${checkpoint.title}:</strong> ${option.answer} -> <span class="badge ${statusClass(effectiveStatuses[i])}">${effectiveStatuses[i]}</span>`;
     }
 
     summaryList.appendChild(row);
@@ -631,6 +1159,8 @@ resetAll.addEventListener("click", () => {
   state.answers = new Array(checkpoints.length).fill(null);
   state.index = 0;
   state.koDate = null;
+  state.highestSeverityReached = "On Track";
+  state.responseGates = {};
   koDateInput.value = "";
   render();
 });

@@ -3,11 +3,12 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Campaign Timeline Health and Escalation Playbook</title>
+  <title>Campaign Timeline Health</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="playbook.css" />
+  <link rel="stylesheet" href="decision-tool.css" />
 </head>
 <body>
   <div class="page">
@@ -16,78 +17,87 @@
         <img src="TodayDigital_Icon.png" alt="Today Digital" class="logo" />
         <div>
           <p class="eyebrow">Interactive Playbook</p>
-          <h1>Campaign Timeline Health and Escalation Policy</h1>
-          <p class="subtitle">Navigate triggers and checkpoints with clarity and consistency.</p>
+          <h1>Campaign Timeline Health</h1>
+          <p class="subtitle">Answer one checkpoint question at a time to get a clear status and next step.</p>
         </div>
       </div>
       <div class="nav-links">
-        <a href="index.html" class="nav-link active">Timeline Playbook</a>
+        <a href="index.html" class="nav-link active">Timeline Health</a>
+        <a href="timeline-planner.html" class="nav-link">Timeline Planner</a>
         <a href="comms.html" class="nav-link">Comms Plan</a>
-        <a href="decision-tool.html" class="nav-link">Decision Tool</a>
       </div>
     </header>
 
-    <section class="status-section">
-      <h2>Status Filters</h2>
-      <div class="status-bar" id="statusBar">
-        <button class="status-chip status-ontrack" data-status="On Track">On Track</button>
-        <button class="status-chip status-risk" data-status="At Risk">At Risk</button>
-        <button class="status-chip status-behind" data-status="Behind">Behind</button>
-        <button class="status-chip status-critical" data-status="Critical">Critical</button>
-        <button class="status-chip status-hold" data-status="On Hold">On Hold</button>
-        <button class="status-chip status-all active" data-status="all">All</button>
-      </div>
-    </section>
-
-    <section class="controls">
-      <div class="control">
-        <label for="roleFilter">Role View</label>
-        <select id="roleFilter">
-          <option value="all">All Roles</option>
-          <option value="CSM">CSM</option>
-          <option value="AM">AM</option>
-          <option value="CC">CC</option>
-        </select>
-      </div>
-      <div class="control grow">
-        <label for="searchInput">Search Triggers</label>
-        <input id="searchInput" type="search" placeholder="e.g., SME availability, day 60" />
-      </div>
-    </section>
-
     <section class="grid">
-      <article class="card" id="triggerNavigator">
+      <article class="card full">
         <header class="card-header">
-          <h2>Trigger Navigator</h2>
-          <p>Pick a delay trigger to see status, impact, and actions.</p>
+          <h2>Campaign Timing</h2>
+          <p>Set Kick-off date (Day 0) to calculate where the campaign should be now.</p>
         </header>
         <div class="card-body">
-          <div class="trigger-list" id="triggerList"></div>
+          <div class="ko-planner">
+            <label for="koDateInput">Kick-off date (Day 0)</label>
+            <div class="ko-controls">
+              <input id="koDateInput" type="date" />
+              <button id="jumpSuggested" class="ghost" type="button">Jump to suggested checkpoint</button>
+            </div>
+            <p id="koContext" class="ko-context">Add a Kick-off date to see where the campaign should be today.</p>
+          </div>
         </div>
       </article>
+    </section>
 
-      <article class="card" id="timelineFlow">
+    <section class="decision-layout">
+      <article class="card decision-rail">
         <header class="card-header">
-          <h2>Timeline Checkpoints</h2>
-          <p>Day 30, 60, 90, 135 and 6–9 month decision points.</p>
+          <h2>Checkpoints</h2>
+          <p>Pick a checkpoint or follow in order.</p>
         </header>
-        <div class="card-body timeline" id="timelineContainer"></div>
+        <div class="card-body" id="checkpointRail"></div>
+      </article>
+
+      <article class="card decision-main">
+        <header class="card-header">
+          <p class="eyebrow" id="checkpointLabel"></p>
+          <h2 id="questionText"></h2>
+          <p id="progressText" class="subtitle"></p>
+        </header>
+
+        <div class="card-body">
+          <div id="optionsContainer" class="options-grid"></div>
+
+          <div id="resultCard" class="result-card hidden">
+            <div class="result-top">
+              <h3 id="selectedAnswer"></h3>
+              <span id="statusBadge" class="badge"></span>
+            </div>
+            <div class="result-copy" id="resultAction"></div>
+          </div>
+
+          <div class="decision-controls">
+            <button id="prevBtn" class="ghost">Previous</button>
+            <button id="nextBtn" class="primary-link">Next checkpoint</button>
+          </div>
+        </div>
       </article>
     </section>
 
     <section class="grid">
       <article class="card full">
         <header class="card-header">
-          <h2>Client Comms</h2>
-          <p>Need the comms plan, escalation ladder, or email builder? Head to the comms page.</p>
+          <h2>Session Summary</h2>
+          <p>Track what has been answered and current status at each checkpoint.</p>
         </header>
         <div class="card-body">
-          <a class="primary-link" href="comms.html">Open Comms Plan</a>
+          <div class="summary-controls">
+            <button id="resetAll" class="ghost">Reset all answers</button>
+          </div>
+          <div id="summaryList" class="summary-list"></div>
         </div>
       </article>
     </section>
   </div>
 
-  <script src="playbook.js"></script>
+  <script src="decision-tool.js"></script>
 </body>
 </html>
