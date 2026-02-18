@@ -124,6 +124,16 @@
   font-weight: 700;
 }
 
+.rec-list {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.rec-list li {
+  margin: 0 0 6px;
+  line-height: 1.5;
+}
+
 .timing-note {
   display: inline-block;
   margin-top: 6px;

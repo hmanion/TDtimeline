@@ -283,6 +283,139 @@ const checkpoints = [
   }
 ];
 
+const impactByCheckpointAnswer = {
+  "Kick-off::SME named and confirmed": [
+    "Interview scheduling can proceed without timeline risk."
+  ],
+  "Kick-off::SME not yet confirmed": [
+    "Won't be able to schedule interview.",
+    "Timeline for drafts will be at risk.",
+    "Risk to promotion window."
+  ],
+  "Week 1::Approved": [
+    "Campaign can proceed as planned."
+  ],
+  "Week 1::In edits with clear approval date": [
+    "Campaign cannot fully progress until sign-off.",
+    "Publication is at risk of delay.",
+    "Promotion window may be shortened."
+  ],
+  "Week 1::Not started or no progress": [
+    "Original timeline is no longer feasible.",
+    "Promotion window is being eaten into and will be shorter."
+  ],
+  "Week 2::Booked for this week": [
+    "Content creation can proceed on schedule."
+  ],
+  "Week 2::Booked next week or date being finalized": [
+    "Timeline for drafts is at risk.",
+    "Promotion window is at risk."
+  ],
+  "Week 2::Week 4 or later, or not booked": [
+    "Original timeline is no longer feasible.",
+    "Promotion window is being eaten into and will be shorter."
+  ],
+  "Week 3::Creation is underway": [
+    "No immediate impact to timeline."
+  ],
+  "Week 3::Partially blocked": [
+    "Promotion window is at risk.",
+    "Risk to reach and performance if delays continue."
+  ],
+  "Week 3::Cannot start creation": [
+    "Original timeline is no longer feasible.",
+    "Promotion window is being eaten into and will be shorter."
+  ],
+  "Week 4::Ready to publish this week": [
+    "Full promotion window remains achievable."
+  ],
+  "Week 4::Near-ready, publish expected next week": [
+    "Promotion window is at risk of shortening.",
+    "Reporting depth may be reduced if delayed further."
+  ],
+  "Week 4::Not publish-ready or no clear date": [
+    "Promotion window is being eaten into and will be shorter.",
+    "Risk to reach and performance.",
+    "May not hit benchmarks."
+  ],
+  "Day 30::Content is ready or already published": [
+    "Promotion can continue as planned."
+  ],
+  "Day 30::Not yet live, but ready with locked publish in 5 working days": [
+    "Promotion window is at risk of shortening.",
+    "Risk to reach and performance if delay continues."
+  ],
+  "Day 30::No content ready by Day 30": [
+    "Promotion window is being eaten into and will be shorter.",
+    "Risk to reach and performance.",
+    "May not hit benchmarks."
+  ],
+  "Day 60::All planned content published": [
+    "No immediate impact to promotion depth."
+  ],
+  "Day 60::Some published, and the rest is ready to publish now": [
+    "Remaining content promotion depth is at risk if not published immediately.",
+    "Overall campaign reach may reduce if delay continues."
+  ],
+  "Day 60::Some published, and the rest is not ready": [
+    "Remaining content will not receive full promotion.",
+    "Overall campaign reach will be reduced."
+  ],
+  "Day 60::No content published": [
+    "Only 30 days left in promotion window.",
+    "Reduced reach and performance.",
+    "Comprehensive report is at risk."
+  ],
+  "Day 90::All planned content published": [
+    "Reporting can run as planned."
+  ],
+  "Day 90::Some published, and the rest is ready to publish now": [
+    "Reporting depth may be reduced for late-published items."
+  ],
+  "Day 90::Some published, and the rest is not ready": [
+    "Not able to promote all content.",
+    "Performance will be below benchmark."
+  ],
+  "Day 90::No content published": [
+    "Promotion is no longer possible.",
+    "Comprehensive report is not viable.",
+    "Will begin to impact other quarters and commitments to other clients."
+  ],
+  "Day 120::Campaign deliverables already completed": [
+    "No extension required."
+  ],
+  "Day 120::Extension decision pending": [
+    "Work remains paused pending a client decision."
+  ],
+  "Day 120::Client sacrifices a future quarter to continue": [
+    "Current campaign continues, but future quarter capacity is reduced."
+  ],
+  "Day 120::Client scraps this quarter": [
+    "Remaining quarter work is stopped and closed."
+  ],
+  "Day 120::No client response by deadline": [
+    "Campaign remains paused and unresolved."
+  ],
+  "6-month::Complete or viable plan": [
+    "Campaign remains viable without harming on-track campaigns."
+  ],
+  "6-month::Viable only with reduced scope or accepted tradeoff": [
+    "Campaign completion is no longer achievable without harming on-track campaigns."
+  ],
+  "6-month::Not viable and decision pending": [
+    "Campaign completion is no longer achievable without harming on-track campaigns."
+  ],
+  "9-month::Completed or viable reduced-scope closeout agreed": [
+    "Remaining value can still be delivered via agreed closeout."
+  ],
+  "9-month::Not viable; closeout or de-scope required": [
+    "Campaign completion is no longer achievable without harming on-track campaigns."
+  ],
+  "9-month::No decision or paused": [
+    "Campaign completion is no longer achievable without harming on-track campaigns."
+  ]
+};
+
 const state = {
   index: 0,
   koDate: null,
@@ -313,6 +446,11 @@ function statusClass(status) {
   if (status === "Critical") return "status-critical";
   if (status === "On Hold" || status === "Expired") return "status-hold";
   return "status-ontrack";
+}
+
+function getImpactLines(checkpointTitle, answer) {
+  const key = `${checkpointTitle}::${answer}`;
+  return impactByCheckpointAnswer[key] || ["Impact not specified for this selection."];
 }
 
 function formatDate(d) {
@@ -515,7 +653,7 @@ function renderRail() {
     const selected = state.answers[i];
     const statusText = selected === null
       ? "Not answered"
-      : `Status: ${checkpoint.options[selected].status}`;
+      : `<span class="badge ${statusClass(checkpoint.options[selected].status)}">${checkpoint.options[selected].status}</span>`;
     btn.innerHTML = `
       <div class="rail-item-title">${i + 1}. ${checkpoint.title}</div>
       <div class="rail-item-status">${statusText}</div>
@@ -554,10 +692,16 @@ function renderCurrent() {
     const picked = checkpoint.options[selectedIndex];
     const action = applyTimeDates(picked.action, checkpoint.title);
     const prep = applyTimeDates(picked.prep, checkpoint.title);
+    const impacts = getImpactLines(checkpoint.title, picked.answer);
+    const impactHtml = impacts.map((line) => `<li>${line}</li>`).join("");
     selectedAnswer.textContent = picked.answer;
     statusBadge.className = `badge ${statusClass(picked.status)}`;
     statusBadge.textContent = picked.status;
     resultAction.innerHTML = `
+      <section class="rec-section">
+        <h4 class="rec-title">Impact</h4>
+        <ul class="rec-list">${impactHtml}</ul>
+      </section>
       <section class="rec-section">
         <h4 class="rec-title">What To Do Now</h4>
         <p class="rec-text"><strong>${action}</strong></p>

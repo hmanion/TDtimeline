@@ -159,7 +159,7 @@ const neutralCauseOptions = [
   "No content has been published by day 60.",
   "Not all content is ready to publish by day 90.",
   "No content is ready to publish by day 90.",
-  "We are now 135 days into the campaign without all content published."
+  "We are now 120 days into the campaign without all content published."
 ];
 
 const guidedFields = document.getElementById("guidedFields");

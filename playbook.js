@@ -144,18 +144,70 @@ const timeline = [
     ]
   },
   {
-    title: "Day 135 Carry-over Cut Off",
-    trigger: "135 days after the start of the campaign/quarter",
-    status: "On Hold",
-    impact: [
-      "Work cannot be prioritised without harming on-track campaigns"
-    ],
-    actions: [
-      { text: "Email client", roles: ["CSM"] },
-      { text: "No longer able to prioritise this work without impacting on-track campaigns", roles: [] },
-      { text: "Option 1: Continue with existing work and sacrifice future quarter", roles: [] },
-      { text: "Option 2: Scrap incomplete work and move onto next quarter", roles: [] },
-      { text: "Provide clear decision deadline: 5 working days", roles: ["CSM"] }
+    title: "Day 120 Extension Checkpoint",
+    options: [
+      {
+        label: "Campaign completed",
+        trigger: "Campaign deliverables are already complete by day 120",
+        status: "On Track",
+        impact: [
+          "No extension is required"
+        ],
+        actions: [
+          { text: "Close campaign and archive outcomes", roles: ["CSM"] },
+          { text: "Confirm no further checkpoint actions are required", roles: [] }
+        ]
+      },
+      {
+        label: "Decision pending",
+        trigger: "Day 120 reached and extension decision is still pending",
+        status: "On Hold",
+        impact: [
+          "Work remains paused pending a client decision"
+        ],
+        actions: [
+          { text: "Pause execution", roles: [] },
+          { text: "Send binary decision deadline to client", roles: ["CSM"] },
+          { text: "Prepare quarter-impact scenarios", roles: ["AM", "CSM"] }
+        ]
+      },
+      {
+        label: "Sacrifice future quarter",
+        trigger: "Client chooses to sacrifice a future quarter to continue",
+        status: "Behind",
+        impact: [
+          "Current campaign continues, but future quarter capacity is reduced"
+        ],
+        actions: [
+          { text: "Update timeline and require client confirmation of the tradeoff", roles: ["CSM"] },
+          { text: "Record decision and set 6-month viability review criteria", roles: ["AM", "CSM"] }
+        ]
+      },
+      {
+        label: "Scrap this quarter",
+        trigger: "Client chooses to scrap this quarter",
+        status: "Expired",
+        impact: [
+          "Remaining quarter work is stopped and closed"
+        ],
+        actions: [
+          { text: "Stop remaining quarter work", roles: [] },
+          { text: "Close with documented scope loss and next-quarter restart conditions", roles: ["CSM", "AM"] }
+        ]
+      },
+      {
+        label: "No response by deadline",
+        trigger: "No client response by the decision deadline",
+        status: "On Hold",
+        impact: [
+          "Campaign remains paused and unresolved"
+        ],
+        actions: [
+          { text: "Keep campaign on hold", roles: [] },
+          { text: "Escalate commercially via AM owner", roles: ["AM"] },
+          { text: "Carry unresolved status into 6-month checkpoint", roles: ["CSM"] }
+        ]
+      }
     ]
   },
   {
@@ -186,9 +238,9 @@ function statusBadge(status) {
     ? "status-critical"
     : status === "Behind"
       ? "status-behind"
-      : status === "On Hold"
+      : status === "On Hold" || status === "Expired"
         ? "status-hold"
-        : status === "At Risk"
+      : status === "At Risk"
           ? "status-risk"
           : "status-ontrack";
   return `<span class="badge ${cls}">${status}</span>`;

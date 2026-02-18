@@ -28,6 +28,25 @@
       </div>
     </header>
 
+    <section class="grid">
+      <article class="card full">
+        <header class="card-header">
+          <h2>Campaign Timing</h2>
+          <p>Set Kick-off date (Day 0) to calculate where the campaign should be now.</p>
+        </header>
+        <div class="card-body">
+          <div class="ko-planner">
+            <label for="koDateInput">Kick-off date (Day 0)</label>
+            <div class="ko-controls">
+              <input id="koDateInput" type="date" />
+              <button id="jumpSuggested" class="ghost" type="button">Jump to suggested checkpoint</button>
+            </div>
+            <p id="koContext" class="ko-context">Add a Kick-off date to see where the campaign should be today.</p>
+          </div>
+        </div>
+      </article>
+    </section>
+
     <section class="decision-layout">
       <article class="card decision-rail">
         <header class="card-header">
@@ -45,15 +64,6 @@
         </header>
 
         <div class="card-body">
-          <div class="ko-planner">
-            <label for="koDateInput">Kick-off date (Day 0)</label>
-            <div class="ko-controls">
-              <input id="koDateInput" type="date" />
-              <button id="jumpSuggested" class="ghost" type="button">Jump to suggested checkpoint</button>
-            </div>
-            <p id="koContext" class="ko-context">Add a Kick-off date to see where the campaign should be today.</p>
-          </div>
-
           <div id="optionsContainer" class="options-grid"></div>
 
           <div id="resultCard" class="result-card hidden">
