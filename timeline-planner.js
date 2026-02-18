@@ -971,8 +971,7 @@ function renderTimelineVisual(viewMode, hostId) {
     ? [
       { type: "milestone", label: "Kick-off", key: "kickoff" },
       { type: "bar", label: "Content Plan", start: "kickoff", end: "contentPlan" },
-      { type: "bar", label: "Interview window", start: "contentPlan", end: "interview" },
-      { type: "milestone", label: "Interview complete", key: "interview" },
+      { type: "interview_combo", label: "Interview", start: "contentPlan", key: "interview" },
       // Client view folds internal review into Writing, while keeping client review explicit.
       { type: "bar", label: "Writing", start: "interview", end: "internalReview" },
       { type: "bar", label: "Client review", start: "internalReview", end: "clientReview" },
@@ -983,8 +982,7 @@ function renderTimelineVisual(viewMode, hostId) {
     : [
       { type: "milestone", label: "Kick-off", key: "kickoff" },
       { type: "bar", label: "Content Plan", start: "kickoff", end: "contentPlan" },
-      { type: "bar", label: "Interview window", start: "contentPlan", end: "interview" },
-      { type: "milestone", label: "Interview complete", key: "interview" },
+      { type: "interview_combo", label: "Interview", start: "contentPlan", key: "interview" },
       { type: "bar", label: "Writing", start: "interview", end: "writing" },
       { type: "bar", label: "Internal Review", start: "writing", end: "internalReview" },
       { type: "bar", label: "Client review", start: "internalReview", end: "clientReview" },
@@ -1133,6 +1131,67 @@ function renderTimelineVisual(viewMode, hostId) {
     const projectedParts = [];
     const lagParts = [];
     let rowLag = null;
+    if (item.type === "interview_combo") {
+      const start = parseDate(campaign.idealTimeline.milestonePlan[item.start]);
+      const planEnd = parseDate(campaign.idealTimeline.milestonePlan[item.key]);
+      const actualEnd = parseDate(campaign.actuals.milestoneActual[item.key]);
+      const projectedEnd = parseDate(projectedMilestones[item.key]);
+      if (!start || !planEnd) return;
+
+      const x1 = xStartOf(start);
+      const x2 = xEndOf(planEnd);
+      const maxXParts = [x2];
+
+      if (showProjected) {
+        const pEnd = parseDate(projectedMilestones[item.key] || campaign.idealTimeline.milestonePlan[item.key]);
+        if (pEnd) {
+          const px2 = xEndOf(pEnd);
+          projectedParts.push(`<rect class="vis-projected-bar" x="${x1}" y="${y + 1}" width="${Math.max(6, px2 - x1)}" height="10" rx="5" ry="5"/>`);
+          maxXParts.push(px2);
+        }
+      }
+
+      if (showIdeal) {
+        rowObjects.push(`<rect class="vis-task" x="${x1}" y="${y}" width="${Math.max(6, x2 - x1)}" height="12" rx="6" ry="6"/>`);
+        rowObjects.push(`<rect class="vis-plan-node" x="${xOf(planEnd) - 4}" y="${y}" width="10" height="12" rx="3" ry="3"/>`);
+        maxXParts.push(xOf(planEnd));
+      }
+      if (actualEnd) {
+        rowObjects.push(`<rect class="vis-actual-node" x="${xOf(actualEnd) - 4}" y="${y}" width="10" height="12" rx="3" ry="3"/>`);
+        maxXParts.push(xOf(actualEnd));
+      }
+      if (showProjected && projectedEnd) {
+        maxXParts.push(xOf(projectedEnd));
+      }
+
+      if (showLag && actualEnd) {
+        const idealX = xOf(planEnd);
+        const actualX = xOf(actualEnd);
+        const lagDays = diffDays(planEnd, actualEnd);
+        if (lagDays !== 0) {
+          const lagX1 = Math.min(idealX, actualX);
+          const lagX2 = Math.max(idealX, actualX);
+          const lagText = lagDays > 0 ? `+${lagDays}d` : `${lagDays}d`;
+          const labelX = Math.min(lagX2 + 5, width - right - 6);
+          lagParts.push(`<rect class="vis-lag-bar" x="${lagX1}" y="${y + 1}" width="${Math.max(2, lagX2 - lagX1)}" height="10" rx="5" ry="5"/>`);
+          lagParts.push(`<text class="vis-lag-label vis-lag-label-hover" x="${labelX}" y="${y + 4}">${lagText}</text>`);
+          rowLag = lagText;
+        }
+      }
+
+      const labelX = Math.min(Math.max(...maxXParts) + 8, width - right - 6);
+      rowObjects.push(`<text class="vis-bar-label" x="${labelX}" y="${y + 10}">${item.label}</text>`);
+
+      if (viewMode === "internal" && rowLag) {
+        const badgeW = Math.max(32, rowLag.length * 7 + 10);
+        const badgeX = width - right + ((right - badgeW) / 2);
+        rowObjects.push(`<rect class="vis-lag-badge-bg" x="${badgeX}" y="${y - 1}" width="${badgeW}" height="14" rx="7" ry="7"/>`);
+        rowObjects.push(`<text class="vis-lag-badge-text" x="${badgeX + (badgeW / 2)}" y="${y + 9}" text-anchor="middle">${rowLag}</text>`);
+      }
+
+      rowGroups.push(`<g class="vis-row-group">${projectedParts.join("")}${lagParts.join("")}${rowObjects.join("")}</g>`);
+      return;
+    }
     if (item.type === "bar") {
       const start = parseDate(campaign.idealTimeline.milestonePlan[item.start]);
       const end = parseDate(campaign.idealTimeline.milestonePlan[item.end]);
