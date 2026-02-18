@@ -90,7 +90,11 @@ const defaultCampaign = {
   },
   settings: {
     useBusinessDays: false,
-    showInterviewClient: true
+    showInterviewClient: true,
+    showProjectedOnCharts: false,
+    showLagOnCharts: true,
+    showIdealOnCharts: true,
+    chartInternalView: false
   },
   revisions: [],
   ui: {
@@ -264,6 +268,10 @@ function migrateToV2(parsed) {
   migrated.campaignName = parsed.campaignName || "";
   migrated.settings.useBusinessDays = Boolean(parsed.settings?.useBusinessDays);
   migrated.settings.showInterviewClient = parsed.settings?.showInterviewClient !== false;
+  migrated.settings.showProjectedOnCharts = Boolean(parsed.settings?.showProjectedOnCharts);
+  migrated.settings.showLagOnCharts = parsed.settings?.showLagOnCharts !== false;
+  migrated.settings.showIdealOnCharts = parsed.settings?.showIdealOnCharts !== false;
+  migrated.settings.chartInternalView = Boolean(parsed.settings?.chartInternalView);
 
   if (parsed.schemaVersion === 2 && parsed.baseline && parsed.idealTimeline && parsed.actuals) {
     return {
@@ -776,6 +784,90 @@ function renderIdealTimeline() {
   });
 }
 
+function renderProjectedTimeline() {
+  const summary = document.getElementById("projectedSummary");
+  const bars = document.getElementById("projectedPhaseBars");
+  const table = document.getElementById("projectedTrackerTable");
+  if (!summary || !bars || !table) return;
+
+  if (!campaign.baseline.locked) {
+    summary.textContent = "Lock baseline dates to calculate projected timeline.";
+    bars.innerHTML = "";
+    table.innerHTML = "";
+    return;
+  }
+
+  const projected = campaign.derived.projectedMilestones || {};
+  const getProjected = (key) => projected[key] || campaign.idealTimeline.milestonePlan[key] || "";
+  const prod = { start: getProjected("kickoff"), end: getProjected("publishing") };
+  const prom = { start: getProjected("publishing"), end: getProjected("promoting") };
+  const rep = { start: getProjected("promoting"), end: getProjected("reporting") };
+
+  summary.innerHTML = `
+    Projected production window: <strong>${phaseRangeText(prod)}</strong><br>
+    Projected promotion window: <strong>${phaseRangeText(prom)}</strong><br>
+    Projected reporting window: <strong>${phaseRangeText(rep)}</strong>
+  `;
+
+  const projDays = (phase) => {
+    const s = parseDate(phase.start);
+    const e = parseDate(phase.end);
+    if (!s || !e) return 0;
+    let c = 0;
+    let cursor = startOfDay(s);
+    while (cursor <= e) {
+      if (isUkWorkingDay(cursor)) c += 1;
+      cursor = addDays(cursor, 1);
+    }
+    return c;
+  };
+
+  const phaseRows = [
+    { name: "Production", window: prod, days: projDays(prod) },
+    { name: "Promotion", window: prom, days: projDays(prom) },
+    { name: "Reporting", window: rep, days: projDays(rep) }
+  ];
+
+  bars.innerHTML = phaseRows.map((row) => `
+    <div class="phase-row">
+      <div class="phase-name">${row.name}</div>
+      <div class="phase-bar-wrap"><div class="phase-bar">${row.days} working days (${phaseRangeText(row.window)})</div></div>
+    </div>
+  `).join("");
+
+  table.innerHTML = `
+    <table class="milestone-table">
+      <thead>
+        <tr><th>Workflow step</th><th>Ideal deadline</th><th>Actual completion</th><th>Projected completion</th><th>Projected variance</th></tr>
+      </thead>
+      <tbody>
+        ${milestoneOrder.map((key) => {
+          const ideal = campaign.idealTimeline.milestonePlan[key] || "";
+          const actual = campaign.actuals.milestoneActual[key] || "";
+          const projectedDate = getProjected(key);
+          const projectedVariance = ideal && projectedDate ? diffDays(parseDate(ideal), parseDate(projectedDate)) : null;
+          const varianceText = projectedVariance === null
+            ? "-"
+            : projectedVariance === 0
+              ? '<span class="delta-chip">On target</span>'
+              : projectedVariance > 0
+                ? `<span class="delta-chip delta-late">+${projectedVariance} days</span>`
+                : `<span class="delta-chip delta-early">${projectedVariance} days</span>`;
+          return `
+            <tr>
+              <td>${milestoneLabels[key]}</td>
+              <td>${formatDate(ideal)}</td>
+              <td>${actual ? formatDate(actual) : "-"}</td>
+              <td>${formatDate(projectedDate)}</td>
+              <td>${varianceText}</td>
+            </tr>
+          `;
+        }).join("")}
+      </tbody>
+    </table>
+  `;
+}
+
 function setImpactSummary(milestoneKey, oldValue, newValue, before, after) {
   if (!oldValue && !newValue) {
     campaign.ui.lastImpact = null;
@@ -843,6 +935,10 @@ function renderTimelineVisual(viewMode, hostId) {
 
   const policyDate = parseDate(campaign.policyLayer.firstPublishByDay30Deadline);
   const revised = parseDate(campaign.derived.projectedPublishDate);
+  const showProjected = Boolean(campaign.settings.showProjectedOnCharts);
+  const showLag = campaign.settings.showLagOnCharts !== false;
+  const showIdeal = campaign.settings.showIdealOnCharts !== false;
+  const projectedMilestones = campaign.derived.projectedMilestones || {};
   const prodStart = parseDate(campaign.idealTimeline.phaseWindows.production.start);
   const prodEnd = parseDate(campaign.idealTimeline.phaseWindows.production.end);
   const promStart = parseDate(campaign.idealTimeline.phaseWindows.promotion.start);
@@ -867,7 +963,7 @@ function renderTimelineVisual(viewMode, hostId) {
   const width = Math.max(1100, host.clientWidth || 1100);
   const height = 430;
   const left = 24;
-  const right = 12;
+  const right = viewMode === "internal" ? 86 : 12;
   const laneTaskStart = 98;
   const rowGap = 26;
   const flowRows = viewMode === "client"
@@ -989,13 +1085,19 @@ function renderTimelineVisual(viewMode, hostId) {
     phaseBands.push(`<rect class="${cls}" x="${x1}" y="48" width="${x2 - x1}" height="${timelineBottom - 40}" rx="8" ry="8"/>`);
     phaseBands.push(`<text class="vis-text vis-band-label" x="${x1 + 8}" y="64">${label}</text>`);
   };
-  addPhaseBand(prodStart, prodEnd, "vis-phase-prod-band", `Production (${phaseDurationDays(campaign, "production")}d)`);
-  addPhaseBand(promStart, promEnd, "vis-phase-prom-band", `Promotion (${phaseDurationDays(campaign, "promotion")}d)`);
-  addPhaseBand(repStart, repEnd, "vis-phase-rep-band", `Reporting (${phaseDurationDays(campaign, "reporting")}d)`);
+  if (showIdeal) {
+    addPhaseBand(prodStart, prodEnd, "vis-phase-prod-band", `Production (${phaseDurationDays(campaign, "production")}d)`);
+    addPhaseBand(promStart, promEnd, "vis-phase-prom-band", `Promotion (${phaseDurationDays(campaign, "promotion")}d)`);
+    addPhaseBand(repStart, repEnd, "vis-phase-rep-band", `Reporting (${phaseDurationDays(campaign, "reporting")}d)`);
+  }
 
-  const rowObjects = [];
+  const rowGroups = [];
   flowRows.forEach((item, idx) => {
     const y = laneTaskStart + (idx * rowGap);
+    const rowObjects = [];
+    const projectedParts = [];
+    const lagParts = [];
+    let rowLag = null;
     if (item.type === "bar") {
       const start = parseDate(campaign.idealTimeline.milestonePlan[item.start]);
       const end = parseDate(campaign.idealTimeline.milestonePlan[item.end]);
@@ -1003,19 +1105,84 @@ function renderTimelineVisual(viewMode, hostId) {
       const x1 = xStartOf(start);
       const x2 = xEndOf(end);
       const w = Math.max(6, x2 - x1);
-      rowObjects.push(`<rect class="vis-task" x="${x1}" y="${y}" width="${w}" height="12" rx="6" ry="6"/>`);
-      rowObjects.push(`<text class="vis-bar-label" x="${Math.min(x2 + 6, width - right - 6)}" y="${y + 10}">${item.label}</text>`);
+      if (showProjected) {
+        const pStart = parseDate(projectedMilestones[item.start] || campaign.idealTimeline.milestonePlan[item.start]);
+        const pEnd = parseDate(projectedMilestones[item.end] || campaign.idealTimeline.milestonePlan[item.end]);
+        if (pStart && pEnd) {
+          const px1 = xStartOf(pStart);
+          const px2 = xEndOf(pEnd);
+          projectedParts.push(`<rect class="vis-projected-bar" x="${px1}" y="${y + 1}" width="${Math.max(6, px2 - px1)}" height="10" rx="5" ry="5"/>`);
+        }
+      }
+      if (showIdeal) {
+        rowObjects.push(`<rect class="vis-task" x="${x1}" y="${y}" width="${w}" height="12" rx="6" ry="6"/>`);
+        rowObjects.push(`<text class="vis-bar-label" x="${Math.min(x2 + 6, width - right - 6)}" y="${y + 10}">${item.label}</text>`);
+      }
+
+      const actualEnd = parseDate(campaign.actuals.milestoneActual[item.end]);
+      const projectedEnd = parseDate(projectedMilestones[item.end]);
+      if (showLag && actualEnd) {
+        const idealX = xOf(end);
+        const actualX = xOf(actualEnd);
+        const lagDays = diffDays(end, actualEnd);
+        if (lagDays !== 0) {
+          const lagX1 = Math.min(idealX, actualX);
+          const lagX2 = Math.max(idealX, actualX);
+          const lagText = lagDays > 0 ? `+${lagDays}d` : `${lagDays}d`;
+          const labelX = Math.min(lagX2 + 5, width - right - 6);
+          lagParts.push(`<rect class="vis-lag-bar" x="${lagX1}" y="${y + 1}" width="${Math.max(2, lagX2 - lagX1)}" height="10" rx="5" ry="5"/>`);
+          lagParts.push(`<text class="vis-lag-label vis-lag-label-hover" x="${labelX}" y="${y + 4}">${lagText}</text>`);
+          rowLag = lagText;
+        }
+      }
+      if (viewMode === "internal" && rowLag) {
+        const badgeW = Math.max(32, rowLag.length * 7 + 10);
+        const badgeX = width - right + ((right - badgeW) / 2);
+        rowObjects.push(`<rect class="vis-lag-badge-bg" x="${badgeX}" y="${y - 1}" width="${badgeW}" height="14" rx="7" ry="7"/>`);
+        rowObjects.push(`<text class="vis-lag-badge-text" x="${badgeX + (badgeW / 2)}" y="${y + 9}" text-anchor="middle">${rowLag}</text>`);
+      }
+      rowGroups.push(`<g class="vis-row-group">${projectedParts.join("")}${lagParts.join("")}${rowObjects.join("")}</g>`);
       return;
     }
     const plan = parseDate(campaign.idealTimeline.milestonePlan[item.key]);
     const actual = parseDate(campaign.actuals.milestoneActual[item.key]);
+    const projectedForStep = parseDate(projectedMilestones[item.key]);
     const labelX = Math.min(
       Math.max(plan ? xOf(plan) : 0, actual ? xOf(actual) : 0) + 8,
       width - right - 6
     );
-    if (plan) rowObjects.push(`<rect class="vis-plan-node" x="${xOf(plan) - 4}" y="${y}" width="10" height="12" rx="3" ry="3"/>`);
+    if (showProjected && projectedForStep) {
+      const px1 = xStartOf(projectedForStep) + (slotWidth * 0.1);
+      const pw = Math.max(6, slotWidth * 0.8);
+      projectedParts.push(`<rect class="vis-projected-bar" x="${px1}" y="${y + 1}" width="${pw}" height="10" rx="5" ry="5"/>`);
+    }
+    if (showIdeal && plan) rowObjects.push(`<rect class="vis-plan-node" x="${xOf(plan) - 4}" y="${y}" width="10" height="12" rx="3" ry="3"/>`);
     if (actual) rowObjects.push(`<rect class="vis-actual-node" x="${xOf(actual) - 4}" y="${y}" width="10" height="12" rx="3" ry="3"/>`);
-    rowObjects.push(`<text class="vis-milestone-label" x="${labelX}" y="${y + 10}">${item.label}</text>`);
+    if (showIdeal || showProjected || actual) {
+      rowObjects.push(`<text class="vis-milestone-label" x="${labelX}" y="${y + 10}">${item.label}</text>`);
+    }
+
+    if (showLag && plan && actual) {
+      const lagDays = diffDays(plan, actual);
+      if (lagDays !== 0) {
+        const idealX = xOf(plan);
+        const actualX = xOf(actual);
+        const lagX1 = Math.min(idealX, actualX);
+        const lagX2 = Math.max(idealX, actualX);
+        const lagText = lagDays > 0 ? `+${lagDays}d` : `${lagDays}d`;
+        const lagLabelX = Math.min(lagX2 + 5, width - right - 6);
+        lagParts.push(`<rect class="vis-lag-bar" x="${lagX1}" y="${y + 1}" width="${Math.max(2, lagX2 - lagX1)}" height="10" rx="5" ry="5"/>`);
+        lagParts.push(`<text class="vis-lag-label vis-lag-label-hover" x="${lagLabelX}" y="${y + 4}">${lagText}</text>`);
+        rowLag = lagText;
+      }
+    }
+    if (viewMode === "internal" && rowLag) {
+      const badgeW = Math.max(32, rowLag.length * 7 + 10);
+      const badgeX = width - right + ((right - badgeW) / 2);
+      rowObjects.push(`<rect class="vis-lag-badge-bg" x="${badgeX}" y="${y - 1}" width="${badgeW}" height="14" rx="7" ry="7"/>`);
+      rowObjects.push(`<text class="vis-lag-badge-text" x="${badgeX + (badgeW / 2)}" y="${y + 9}" text-anchor="middle">${rowLag}</text>`);
+    }
+    rowGroups.push(`<g class="vis-row-group">${projectedParts.join("")}${lagParts.join("")}${rowObjects.join("")}</g>`);
   });
 
   const policyLine = policyDate
@@ -1026,11 +1193,11 @@ function renderTimelineVisual(viewMode, hostId) {
     ? `<line class="vis-revised" x1="${xOf(revised)}" y1="34" x2="${xOf(revised)}" y2="${timelineBottom + 8}"/>`
     : "";
 
-  const policyVisuals = viewMode === "internal" ? `${policyLine}${projectedLine}` : "";
+  const policyVisuals = viewMode === "internal" ? `${showIdeal ? policyLine : ""}${showProjected ? projectedLine : ""}` : "";
   const internalKeyItems = viewMode === "internal"
     ? `
-      <span><span class="key-line key-policy"></span>Policy Day 30</span>
-      <span><span class="key-line key-projected"></span>Projected publish</span>
+      ${showIdeal ? '<span><span class="key-line key-policy"></span>Policy Day 30</span>' : ""}
+      ${showProjected ? '<span><span class="key-line key-projected"></span>Projected publish</span><span><span class="key-swatch key-projected-bar"></span>Projected step bar</span>' : ""}
     `
     : "";
 
@@ -1042,7 +1209,7 @@ function renderTimelineVisual(viewMode, hostId) {
       ${phaseBands.join("")}
       <line class="vis-lane" x1="${left}" y1="${laneTaskStart}" x2="${width - right}" y2="${laneTaskStart}"/>
       <line class="vis-lane" x1="${left}" y1="${laneTaskEnd}" x2="${width - right}" y2="${laneTaskEnd}"/>
-      ${rowObjects.join("")}
+      ${rowGroups.join("")}
       ${policyVisuals}
     </svg>
     <div class="timeline-key">
@@ -1053,33 +1220,6 @@ function renderTimelineVisual(viewMode, hostId) {
       <span><span class="key-line key-week"></span>Week boundary</span>
     </div>
   `;
-}
-
-function renderTimelineList(viewMode, containerId) {
-  const container = document.getElementById(containerId);
-  if (!container) return;
-  const items = [];
-
-  if (viewMode === "client") {
-    const prod = campaign.idealTimeline.phaseWindows.production;
-    const prom = campaign.idealTimeline.phaseWindows.promotion;
-    const rep = campaign.idealTimeline.phaseWindows.reporting;
-    items.push(`<div class="timeline-item"><strong>Production</strong>${phaseRangeText(prod)}</div>`);
-    if (campaign.settings.showInterviewClient) {
-      items.push(`<div class="timeline-item"><strong>Interview</strong>${formatDate(campaign.actuals.milestoneActual.interview || campaign.idealTimeline.milestonePlan.interview)}</div>`);
-    }
-    items.push(`<div class="timeline-item"><strong>Promotion</strong>${phaseRangeText(prom)}</div>`);
-    items.push(`<div class="timeline-item"><strong>Reporting</strong>${phaseRangeText(rep)}</div>`);
-  } else {
-    items.push(`<div class="timeline-item"><strong>Active contract end</strong>${formatDate(campaign.derived.activeContractEndDate)}</div>`);
-    items.push(`<div class="timeline-item"><strong>Projected publish</strong>${formatDate(campaign.derived.projectedPublishDate)}</div>`);
-    items.push(`<div class="timeline-item"><strong>Projected report share</strong>${formatDate(campaign.derived.projectedReportDate)}</div>`);
-    milestoneOrder.forEach((key) => {
-      items.push(`<div class="timeline-item"><strong>${milestoneLabels[key]}</strong>Ideal: ${formatDate(campaign.idealTimeline.milestonePlan[key])}<br>Actual: ${formatDate(campaign.actuals.milestoneActual[key])}</div>`);
-    });
-  }
-
-  container.innerHTML = `<div class="timeline-list">${items.join("")}</div>`;
 }
 
 function renderStatusAndFeasibility() {
@@ -1196,6 +1336,10 @@ function writeCampaignToForm() {
 
   document.getElementById("useBusinessDays").checked = campaign.settings.useBusinessDays;
   document.getElementById("showInterviewClient").checked = campaign.settings.showInterviewClient;
+  document.getElementById("showProjectedOnCharts").checked = campaign.settings.showProjectedOnCharts;
+  document.getElementById("showLagOnCharts").checked = campaign.settings.showLagOnCharts !== false;
+  document.getElementById("showIdealOnCharts").checked = campaign.settings.showIdealOnCharts !== false;
+  document.getElementById("chartInternalView").checked = Boolean(campaign.settings.chartInternalView);
 
   renderBaselineCard();
 }
@@ -1204,6 +1348,10 @@ function readFormToCampaign() {
   campaign.campaignName = document.getElementById("campaignName").value.trim();
   campaign.settings.useBusinessDays = document.getElementById("useBusinessDays").checked;
   campaign.settings.showInterviewClient = document.getElementById("showInterviewClient").checked;
+  campaign.settings.showProjectedOnCharts = document.getElementById("showProjectedOnCharts").checked;
+  campaign.settings.showLagOnCharts = document.getElementById("showLagOnCharts").checked;
+  campaign.settings.showIdealOnCharts = document.getElementById("showIdealOnCharts").checked;
+  campaign.settings.chartInternalView = document.getElementById("chartInternalView").checked;
 
   if (!campaign.baseline.locked) {
     campaign.baseline.contractStartDate = document.getElementById("contractStartDate").value;
@@ -1256,6 +1404,89 @@ function downloadFile(name, content, type) {
   a.download = name;
   a.click();
   URL.revokeObjectURL(url);
+}
+
+function svgToPngDataUrl(svgEl) {
+  return new Promise((resolve, reject) => {
+    try {
+      const clone = svgEl.cloneNode(true);
+      if (!clone.getAttribute("xmlns")) clone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+      if (!clone.getAttribute("xmlns:xlink")) clone.setAttribute("xmlns:xlink", "http://www.w3.org/1999/xlink");
+
+      // Inline computed styles so class-based CSS survives SVG->PNG export.
+      const styleProps = [
+        "fill",
+        "fill-opacity",
+        "stroke",
+        "stroke-opacity",
+        "stroke-width",
+        "stroke-dasharray",
+        "opacity",
+        "font-family",
+        "font-size",
+        "font-weight",
+        "letter-spacing",
+        "text-anchor"
+      ];
+      const sourceNodes = [svgEl, ...svgEl.querySelectorAll("*")];
+      const cloneNodes = [clone, ...clone.querySelectorAll("*")];
+      cloneNodes.forEach((node, idx) => {
+        const src = sourceNodes[idx];
+        if (!src) return;
+        const cs = window.getComputedStyle(src);
+        const inline = styleProps
+          .map((prop) => `${prop}:${cs.getPropertyValue(prop)};`)
+          .join("");
+        const existing = node.getAttribute("style") || "";
+        node.setAttribute("style", `${existing}${inline}`);
+      });
+
+      const serializer = new XMLSerializer();
+      const svgMarkup = serializer.serializeToString(clone);
+      const svgBlob = new Blob([svgMarkup], { type: "image/svg+xml;charset=utf-8" });
+      const url = URL.createObjectURL(svgBlob);
+      const img = new Image();
+      img.onload = () => {
+        const viewBox = svgEl.viewBox?.baseVal;
+        const width = Math.max(1, Math.round(viewBox?.width || svgEl.clientWidth || 1400));
+        const height = Math.max(1, Math.round(viewBox?.height || svgEl.clientHeight || 450));
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(0, 0, width, height);
+        ctx.drawImage(img, 0, 0, width, height);
+        URL.revokeObjectURL(url);
+        resolve(canvas.toDataURL("image/png"));
+      };
+      img.onerror = () => {
+        URL.revokeObjectURL(url);
+        reject(new Error("Unable to render chart image."));
+      };
+      img.src = url;
+    } catch (err) {
+      reject(err);
+    }
+  });
+}
+
+async function downloadChartImage(hostId, filename) {
+  const host = document.getElementById(hostId);
+  const svg = host?.querySelector("svg");
+  if (!svg) {
+    window.alert("No chart is available to download yet.");
+    return;
+  }
+  try {
+    const dataUrl = await svgToPngDataUrl(svg);
+    const a = document.createElement("a");
+    a.href = dataUrl;
+    a.download = filename;
+    a.click();
+  } catch {
+    window.alert("Could not generate chart image. Please try again.");
+  }
 }
 
 function createRevision() {
@@ -1336,7 +1567,7 @@ function runAcceptanceTests() {
 }
 
 function bindEvents() {
-  document.querySelectorAll("#campaignName,#contractStartDate,#contractEndDate,#kickoffDate,#extension30Days,#extensionApprovedDate,#liveStage,#useBusinessDays,#showInterviewClient")
+  document.querySelectorAll("#campaignName,#contractStartDate,#contractEndDate,#kickoffDate,#extension30Days,#extensionApprovedDate,#liveStage,#useBusinessDays,#showInterviewClient,#showProjectedOnCharts,#showLagOnCharts,#showIdealOnCharts,#chartInternalView")
     .forEach((el) => {
       el.addEventListener("change", () => {
         readFormToCampaign();
@@ -1351,6 +1582,10 @@ function bindEvents() {
   document.getElementById("resetPlanner").addEventListener("click", resetPlanner);
   document.getElementById("exportJson").addEventListener("click", exportJson);
   document.getElementById("exportCsv").addEventListener("click", exportCsv);
+  document.getElementById("downloadMainChart").addEventListener("click", () => {
+    const internal = Boolean(campaign.settings.chartInternalView);
+    downloadChartImage("timelineVisualMain", internal ? "internal-timeline-chart.png" : "client-timeline-chart.png");
+  });
   document.getElementById("runTests").addEventListener("click", runAcceptanceTests);
 
 }
@@ -1359,10 +1594,9 @@ function render() {
   writeCampaignToForm();
   recomputeAll(campaign);
   renderIdealTimeline();
-  renderTimelineVisual("client", "timelineVisualClient");
-  renderTimelineVisual("internal", "timelineVisualInternal");
-  renderTimelineList("client", "timelineViewClient");
-  renderTimelineList("internal", "timelineViewInternal");
+  renderProjectedTimeline();
+  const viewMode = campaign.settings.chartInternalView ? "internal" : "client";
+  renderTimelineVisual(viewMode, "timelineVisualMain");
   renderStatusAndFeasibility();
   renderActions();
   renderRevisions();

@@ -176,6 +176,75 @@
   margin-bottom: 0;
 }
 
+.timeline-actions {
+  margin: 6px 0 10px;
+}
+
+.chart-controls {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 10px 14px;
+  margin-bottom: 10px;
+}
+
+.toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #1f2538;
+}
+
+.switch {
+  position: relative;
+  display: inline-block;
+  width: 44px;
+  height: 24px;
+  flex: 0 0 auto;
+}
+
+.switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.slider {
+  position: absolute;
+  inset: 0;
+  border-radius: 999px;
+  background: #c7ccda;
+  transition: background-color 0.2s ease;
+}
+
+.slider::before {
+  content: "";
+  position: absolute;
+  height: 18px;
+  width: 18px;
+  left: 3px;
+  top: 3px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.28);
+  transition: transform 0.2s ease;
+}
+
+.switch input:checked + .slider {
+  background: #2b6cb0;
+}
+
+.switch input:checked + .slider::before {
+  transform: translateX(20px);
+}
+
+.switch input:focus-visible + .slider {
+  outline: 2px solid rgba(43, 108, 176, 0.45);
+  outline-offset: 2px;
+}
+
 .key-swatch {
   width: 14px;
   height: 10px;
@@ -211,6 +280,11 @@
 
 .key-actual {
   background: #1b1c37;
+}
+
+.key-projected-bar {
+  background: rgba(112, 118, 138, 0.34);
+  border-color: rgba(112, 118, 138, 0.58);
 }
 
 .key-line {
@@ -299,6 +373,10 @@
   fill: #1b1c37;
 }
 
+.vis-projected-bar {
+  fill: rgba(112, 118, 138, 0.34);
+}
+
 .vis-plan-dot {
   fill: #30908b;
 }
@@ -335,6 +413,38 @@
   fill: #1f2538;
   font-size: 11px;
   font-weight: 600;
+  font-family: "Montserrat", sans-serif;
+}
+
+.vis-lag-bar {
+  fill: rgba(112, 118, 138, 0.3);
+}
+
+.vis-lag-label {
+  fill: #464d62;
+  font-size: 10px;
+  font-weight: 700;
+  font-family: "Montserrat", sans-serif;
+}
+
+.vis-lag-label-hover {
+  opacity: 0;
+}
+
+.vis-row-group:hover .vis-lag-label-hover {
+  opacity: 1;
+}
+
+.vis-lag-badge-bg {
+  fill: rgba(66, 74, 97, 0.14);
+  stroke: rgba(66, 74, 97, 0.45);
+  stroke-width: 1;
+}
+
+.vis-lag-badge-text {
+  fill: #2a3148;
+  font-size: 10px;
+  font-weight: 700;
   font-family: "Montserrat", sans-serif;
 }
 

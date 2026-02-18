@@ -81,16 +81,30 @@
           <p>Full-width phase bands for Production, Promotion, and Reporting, with workflow timing and completion markers.</p>
         </header>
         <div class="card-body">
-          <div class="timeline-stack">
-            <h3 class="mini-title">Client timeline</h3>
-            <div id="timelineVisualClient" class="timeline-visual"></div>
-            <div id="timelineViewClient"></div>
+          <div class="chart-controls">
+            <label class="toggle-row"><span class="switch"><input id="chartInternalView" type="checkbox" /><span class="slider"></span></span><span>Internal chart view</span></label>
+            <label class="toggle-row"><span class="switch"><input id="showLagOnCharts" type="checkbox" checked /><span class="slider"></span></span><span>Show lag on chart</span></label>
+            <label class="toggle-row"><span class="switch"><input id="showIdealOnCharts" type="checkbox" checked /><span class="slider"></span></span><span>Show ideal timeline</span></label>
+            <label class="toggle-row"><span class="switch"><input id="showProjectedOnCharts" type="checkbox" /><span class="slider"></span></span><span>Show projected timeline</span></label>
           </div>
-          <div class="timeline-stack">
-            <h3 class="mini-title">Internal timeline</h3>
-            <div id="timelineVisualInternal" class="timeline-visual"></div>
-            <div id="timelineViewInternal"></div>
+          <div id="timelineVisualMain" class="timeline-visual"></div>
+          <div class="timeline-actions">
+            <button id="downloadMainChart" class="ghost" type="button">Download chart image</button>
           </div>
+        </div>
+      </article>
+    </section>
+
+    <section class="grid">
+      <article class="card full">
+        <header class="card-header">
+          <h2>3) Projected Timeline (From Actuals)</h2>
+          <p>Based on the actual dates entered so far, this shows the likely timeline if current pace continues.</p>
+        </header>
+        <div class="card-body">
+          <div id="projectedSummary" class="timeline-item"></div>
+          <div id="projectedPhaseBars" class="phase-list"></div>
+          <div id="projectedTrackerTable"></div>
         </div>
       </article>
     </section>
