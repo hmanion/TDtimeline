@@ -28,11 +28,40 @@
   color: var(--text);
 }
 
+.date-pair {
+  grid-column: span 2;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.extension-pair {
+  grid-column: span 2;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  align-items: end;
+}
+
+.full-row {
+  grid-column: span 2;
+}
+
 .check-row {
   flex-direction: row !important;
   align-items: center;
   gap: 8px !important;
   grid-column: span 2;
+}
+
+.extension-pair .check-row {
+  grid-column: span 1;
+}
+
+.check-row input[type="checkbox"] {
+  width: auto;
+  margin: 0;
+  flex: 0 0 auto;
 }
 
 .status-cards {
@@ -81,6 +110,20 @@
   border-radius: 8px;
   border: 1px solid var(--border);
   font-family: "Montserrat", sans-serif;
+}
+
+.projected-date {
+  display: inline-block;
+}
+
+.projected-from-actual {
+  font-weight: 700;
+  color: #1f2538;
+}
+
+.projected-from-forecast {
+  font-style: italic;
+  color: #68708a;
 }
 
 .actions-row {
@@ -135,7 +178,7 @@
 .timeline-visual svg {
   display: block;
   width: 100%;
-  min-width: 1100px;
+  min-width: 1250px;
 }
 
 .timeline-range {
@@ -197,6 +240,18 @@
   color: #1f2538;
 }
 
+.toggle-pair {
+  gap: 10px;
+}
+
+.toggle-side {
+  min-width: 92px;
+  text-align: center;
+  font-size: 12px;
+  font-weight: 700;
+  color: #3f455f;
+}
+
 .switch {
   position: relative;
   display: inline-block;
@@ -250,6 +305,23 @@
   height: 10px;
   border-radius: 4px;
   border: 1px solid transparent;
+}
+
+.key-step {
+  width: 16px;
+  height: 10px;
+  border-radius: 6px;
+  border: 1px solid rgba(33, 76, 144, 0.65);
+  background: rgba(120, 152, 199, 0.55);
+  display: inline-block;
+}
+
+.key-milestone {
+  width: 10px;
+  height: 12px;
+  border-radius: 3px;
+  background: #30908b;
+  display: inline-block;
 }
 
 .key-prod {
@@ -470,8 +542,23 @@
   font-family: "Montserrat", sans-serif;
 }
 
+.vis-inside-bar-label {
+  fill: #24314f;
+  font-size: 10px;
+  font-weight: 700;
+  font-family: "Montserrat", sans-serif;
+  pointer-events: none;
+}
+
 .vis-lag-bar {
   fill: rgba(112, 118, 138, 0.3);
+}
+
+.vis-lag-bar-ahead {
+  fill: none;
+  stroke: rgba(112, 118, 138, 0.85);
+  stroke-width: 1.5;
+  stroke-dasharray: 4 3;
 }
 
 .vis-lag-label {
@@ -487,6 +574,28 @@
 
 .vis-row-group:hover .vis-lag-label-hover {
   opacity: 1;
+}
+
+.vis-policy-lag {
+  fill: rgba(86, 95, 120, 0.28);
+}
+
+.vis-policy-lag-late {
+  fill: rgba(196, 84, 84, 0.32);
+}
+
+.vis-policy-lag-ahead {
+  fill: none;
+  stroke: rgba(86, 95, 120, 0.85);
+  stroke-width: 1.5;
+  stroke-dasharray: 4 3;
+}
+
+.vis-policy-lag-label {
+  fill: #4a5268;
+  font-size: 10px;
+  font-weight: 700;
+  font-family: "Montserrat", sans-serif;
 }
 
 .vis-lag-badge-bg {
@@ -624,6 +733,23 @@
   color: #1d5a37;
 }
 
+.delta-ontrack {
+  background: rgba(47, 154, 93, 0.12);
+  border-color: rgba(47, 154, 93, 0.35);
+  color: #1d5a37;
+}
+
+.delta-close {
+  background: rgba(230, 133, 46, 0.18);
+  border-color: rgba(230, 133, 46, 0.5);
+  color: #8a4b12;
+}
+
+.delta-projected {
+  border-style: dashed;
+  background: rgba(112, 118, 138, 0.08);
+}
+
 .feasibility-banner {
   border-radius: 12px;
   padding: 12px;
@@ -668,6 +794,20 @@
 @media (max-width: 860px) {
   .form-grid {
     grid-template-columns: 1fr;
+  }
+
+  .date-pair {
+    grid-column: span 1;
+    grid-template-columns: 1fr;
+  }
+
+  .extension-pair {
+    grid-column: span 1;
+    grid-template-columns: 1fr;
+  }
+
+  .full-row {
+    grid-column: span 1;
   }
 
   .check-row {
