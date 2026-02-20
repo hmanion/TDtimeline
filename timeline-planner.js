@@ -90,7 +90,6 @@ const defaultCampaign = {
   },
   settings: {
     useBusinessDays: false,
-    showInterviewClient: true,
     showProjectedOnCharts: false,
     showLagOnCharts: true,
     chartInternalView: false
@@ -122,6 +121,12 @@ function toIso(date) {
 
 function todayIso() {
   return toIso(new Date());
+}
+
+function isFutureIsoDate(value, now = new Date()) {
+  const parsed = parseDate(value);
+  if (!parsed) return false;
+  return parsed > startOfDay(now);
 }
 
 function formatDate(dateOrIso) {
@@ -220,6 +225,12 @@ function isUkWorkingDay(date) {
   return !ukNonWorkingDaysForYear(d.getFullYear()).has(toIso(d));
 }
 
+function workingDayOnOrAfter(date) {
+  let d = startOfDay(date);
+  while (!isUkWorkingDay(d)) d = addDays(d, 1);
+  return d;
+}
+
 function addBusinessDays(date, days) {
   const d = new Date(date);
   const direction = days >= 0 ? 1 : -1;
@@ -276,7 +287,6 @@ function migrateToV2(parsed) {
 
   migrated.campaignName = parsed.campaignName || "";
   migrated.settings.useBusinessDays = Boolean(parsed.settings?.useBusinessDays);
-  migrated.settings.showInterviewClient = parsed.settings?.showInterviewClient !== false;
   migrated.settings.showProjectedOnCharts = Boolean(parsed.settings?.showProjectedOnCharts);
   migrated.settings.showLagOnCharts = parsed.settings?.showLagOnCharts !== false;
   migrated.settings.chartInternalView = Boolean(parsed.settings?.chartInternalView);
@@ -382,8 +392,9 @@ function activeContractEndDate(c) {
 }
 
 function computeIdealTimeline(c) {
-  const ko = parseDate(c.baseline.kickoffDate);
-  if (!ko) return;
+  const koInput = parseDate(c.baseline.kickoffDate);
+  if (!koInput) return;
+  const ko = workingDayOnOrAfter(koInput);
   const week1Start = nextMondayAfterKoWeek(ko);
   const week1End = addDays(week1Start, 6);
   const week2End = addDays(week1Start, 13);
@@ -403,12 +414,14 @@ function computeIdealTimeline(c) {
 
   // Workflow duration assumptions (working days):
   // Writing 8wd, Internal Review 2wd, Client Review 5wd.
-  const contentPlanDate = week1End;
-  const interviewDate = week2End > contentPlanDate ? week2End : addDays(contentPlanDate, 1);
+  const contentPlanDate = workingDayOnOrAfter(week1End);
+  const interviewDate = workingDayOnOrAfter(week2End > contentPlanDate ? week2End : addDays(contentPlanDate, 1));
   const writingDate = addBusinessDays(interviewDate, 8);
   const internalReviewDate = addBusinessDays(writingDate, 2);
   const clientReviewDate = addBusinessDays(internalReviewDate, 5);
   const publishingDate = addBusinessDays(clientReviewDate, 1);
+  const promotingDate = workingDayOnOrAfter(promotionEnd);
+  const reportingDate = workingDayOnOrAfter(reportingEnd);
 
   c.idealTimeline.milestonePlan = {
     kickoff: toIso(ko),
@@ -418,8 +431,8 @@ function computeIdealTimeline(c) {
     internalReview: toIso(internalReviewDate),
     clientReview: toIso(clientReviewDate),
     publishing: toIso(publishingDate),
-    promoting: toIso(promotionEnd),
-    reporting: toIso(reportingEnd)
+    promoting: toIso(promotingDate),
+    reporting: toIso(reportingDate)
   };
 }
 
@@ -436,6 +449,7 @@ function computePolicyLayer(c, now = new Date()) {
   c.policyLayer.publishReadyWeekDeadline = formatWc(day30);
   c.policyLayer.reportShareWeekDeadline = formatWc(day90);
 
+  // "Publish-ready by Day 30" means content is created and client-approved by Day 30 week.
   const publishReadyActual = parseDate(c.actuals.milestoneActual.clientReview);
   const reportSharedActual = parseDate(c.actuals.reportSharedActualDate || c.actuals.milestoneActual.reporting);
 
@@ -477,7 +491,7 @@ function computeProjectedMilestones(c) {
   const ko = parseDate(c.baseline.kickoffDate);
   if (!ko) return projected;
 
-  projected.kickoff = ideal.kickoff || toIso(ko);
+  projected.kickoff = toIso(workingDayOnOrAfter(parseDate(ideal.kickoff) || ko));
 
   for (let i = 1; i < milestoneOrder.length; i += 1) {
     const key = milestoneOrder[i];
@@ -488,7 +502,7 @@ function computeProjectedMilestones(c) {
     const prevIdeal = parseDate(ideal[prevKey]);
 
     if (actualDate) {
-      projected[key] = toIso(actualDate);
+      projected[key] = toIso(workingDayOnOrAfter(actualDate));
       continue;
     }
 
@@ -498,13 +512,13 @@ function computeProjectedMilestones(c) {
     }
 
     if (!prevProjected || !prevIdeal) {
-      projected[key] = toIso(idealDate);
+      projected[key] = toIso(workingDayOnOrAfter(idealDate));
       continue;
     }
 
     const lag = Math.max(0, diffDays(prevIdeal, idealDate));
     const shifted = addOffset(prevProjected, lag, c.settings.useBusinessDays);
-    projected[key] = toIso(shifted > idealDate ? shifted : idealDate);
+    projected[key] = toIso(workingDayOnOrAfter(shifted > idealDate ? shifted : idealDate));
   }
 
   // Projected promotion window rule:
@@ -514,21 +528,21 @@ function computeProjectedMilestones(c) {
   const idealPublish = parseDate(ideal.publishing);
   const idealPromotionDeadline = parseDate(ideal.promoting);
   if (projectedPublish && projectedPromoting && idealPromotionDeadline && projectedPromoting > idealPromotionDeadline) {
-    projected.promoting = toIso(addDays(projectedPublish, 29));
+    projected.promoting = toIso(workingDayOnOrAfter(addDays(projectedPublish, 29)));
     // Keep reporting aligned to capped promotion end (approx. 15 calendar days reporting window).
     const cappedPromoting = parseDate(projected.promoting);
     if (cappedPromoting) {
-      projected.reporting = toIso(addDays(cappedPromoting, 15));
+      projected.reporting = toIso(workingDayOnOrAfter(addDays(cappedPromoting, 15)));
     }
   }
 
   // If publishing has slipped beyond ideal, promotion shifts to end at contract/extension end.
   if (projectedPublish && idealPublish && projectedPublish > idealPublish && activeEnd) {
     const promotionEnd = activeEnd >= projectedPublish ? activeEnd : projectedPublish;
-    projected.promoting = toIso(promotionEnd);
+    projected.promoting = toIso(workingDayOnOrAfter(promotionEnd));
     const actualReport = parseDate(c.actuals.reportSharedActualDate || c.actuals.milestoneActual.reporting);
     if (!actualReport) {
-      projected.reporting = toIso(addDays(promotionEnd, 15));
+      projected.reporting = toIso(workingDayOnOrAfter(addDays(promotionEnd, 15)));
     }
   }
 
@@ -789,8 +803,13 @@ function renderIdealTimeline() {
     input.addEventListener("change", (event) => {
       const key = event.target.getAttribute("data-actual");
       const value = event.target.value || "";
-      if (value && value > today) {
+      if (value && isFutureIsoDate(value)) {
         window.alert("Actual completion dates cannot be in the future.");
+        event.target.value = campaign.actuals.milestoneActual[key] || "";
+        return;
+      }
+      if (value && !isUkWorkingDay(parseDate(value))) {
+        window.alert("Actual completion dates must be on a working day.");
         event.target.value = campaign.actuals.milestoneActual[key] || "";
         return;
       }
@@ -1065,7 +1084,10 @@ function renderTimelineVisual(viewMode, hostId) {
   const xOf = (d) => left + ((indexOfDate(d) + 0.5) * slotWidth);
   const xStartOf = (d) => left + (indexOfDate(d) * slotWidth);
   const xEndOf = (d) => left + ((indexOfDate(d) + 1) * slotWidth);
-  const weekStartX = (d) => xStartOf(weekStartMonday(d));
+  // Align band starts with the same rendered week as milestone points.
+  // This prevents weekend dates from showing a milestone in one week
+  // while the phase band starts in the previous week.
+  const weekStartX = (d) => xStartOf(weekStartMonday(snapToWeekday(d)));
   const weekEndX = (d) => xEndOf(addDays(weekStartMonday(d), 4));
   const phaseClassForStep = (stepKey) => {
     if (stepKey === "reporting") return "vis-step-rep";
@@ -1430,36 +1452,30 @@ function renderTimelineVisual(viewMode, hostId) {
 
 function renderStatusAndFeasibility() {
   const policy = policyStatusDisplay();
-  const stage = campaignStageStatus();
   const currentPlanLabel = campaign.derived.feasible ? campaign.derived.currentPlanStatus : "Behind";
 
   const cards = document.getElementById("statusCards");
   cards.innerHTML = `
     <div class="status-card">
+      <h3>Current plan check</h3>
+      <div class="status-card-top">
+        <span class="badge ${statusClass(currentPlanLabel)}">${currentPlanLabel}</span>
+      </div>
+      <div class="kpi-stack">
+        <div class="kpi-number">${campaign.derived.projectedPromotionDays}</div>
+        <div class="kpi-label">Projected promotion days</div>
+      </div>
+      <div class="status-meta">${campaign.derived.feasibilityReason}</div>
+    </div>
+    <div class="status-card">
       <h3>Internal deadline check</h3>
-      <span class="badge ${statusClass(policy.label)}">${policy.label}</span>
+      <div class="status-card-top">
+        <span class="badge ${statusClass(policy.label)}">${policy.label}</span>
+      </div>
+      <div class="status-meta"><strong>Checks:</strong> publish-ready by Day 30 week and report shared by Day 90 week.</div>
       <div class="status-meta">${policy.detail}</div>
     </div>
-    <div class="status-card">
-      <h3>Current plan check</h3>
-      <span class="badge ${statusClass(currentPlanLabel)}">${currentPlanLabel}</span>
-      <div class="status-meta">Projected promotion window: <strong>${campaign.derived.projectedPromotionDays}</strong> day(s).<br>${campaign.derived.feasibilityReason}</div>
-    </div>
-    <div class="status-card">
-      <h3>Current campaign stage</h3>
-      <span class="badge ${statusClass(stage.label)}">${stage.label}</span>
-      <div class="status-meta">${stage.detail}</div>
-    </div>
   `;
-
-  const banner = document.getElementById("feasibilityBanner");
-  if (!campaign.derived.feasible) {
-    banner.className = "feasibility-banner infeasible";
-    banner.innerHTML = `<strong>Timeline no longer feasible.</strong> ${campaign.derived.feasibilityReason}`;
-  } else {
-    banner.className = "feasibility-banner feasible";
-    banner.innerHTML = `<strong>Timeline feasible.</strong> ${campaign.derived.feasibilityReason}`;
-  }
 
   const impact = document.getElementById("impactSummary");
   const lastImpact = campaign.ui.lastImpact;
@@ -1540,7 +1556,6 @@ function writeCampaignToForm() {
   document.getElementById("liveStage").value = campaign.derived.liveStage || campaign.ui.liveStage || liveStages[0];
 
   document.getElementById("useBusinessDays").checked = campaign.settings.useBusinessDays;
-  document.getElementById("showInterviewClient").checked = campaign.settings.showInterviewClient;
   document.getElementById("showProjectedOnCharts").checked = campaign.settings.showProjectedOnCharts;
   document.getElementById("showLagOnCharts").checked = campaign.settings.showLagOnCharts !== false;
   document.getElementById("chartInternalView").checked = Boolean(campaign.settings.chartInternalView);
@@ -1551,7 +1566,6 @@ function writeCampaignToForm() {
 function readFormToCampaign() {
   campaign.campaignName = document.getElementById("campaignName").value.trim();
   campaign.settings.useBusinessDays = document.getElementById("useBusinessDays").checked;
-  campaign.settings.showInterviewClient = document.getElementById("showInterviewClient").checked;
   campaign.settings.showProjectedOnCharts = document.getElementById("showProjectedOnCharts").checked;
   campaign.settings.showLagOnCharts = document.getElementById("showLagOnCharts").checked;
   campaign.settings.chartInternalView = document.getElementById("chartInternalView").checked;
@@ -1728,7 +1742,8 @@ function runAcceptanceTests() {
 
   const t3 = cloneCampaign(base);
   t3.actuals.milestoneActual.clientReview = "2026-03-01";
-  recomputeAll(t3, new Date("2026-03-10T00:00:00"));
+  recomputeAll(t3);
+  computePolicyLayer(t3, new Date("2026-03-10T00:00:00"));
   const stickyOnce = t3.policyLayer.policyMissedPermanent;
   t3.actuals.milestoneActual.clientReview = "2026-01-20";
   recomputeAll(t3);
@@ -1744,10 +1759,9 @@ function runAcceptanceTests() {
   recomputeAll(t5);
   assert("5) Extension toggle", parseDate(t5.derived.activeContractEndDate) > parseDate(t4.derived.activeContractEndDate), "Extension shifts active contract end without clearing policy flags.");
 
-  const t6 = cloneCampaign(base);
-  t6.actuals.milestoneActual.interview = "2099-01-01";
-  const futureBlocked = parseDate(t6.actuals.milestoneActual.interview) > parseDate(todayIso());
-  assert("6) Future actual prevention", futureBlocked, "UI validation prevents future actual dates.");
+  const futureBlocked = isFutureIsoDate("2099-01-01", new Date("2026-01-10T00:00:00"));
+  const nonFutureAllowed = !isFutureIsoDate("2026-01-10", new Date("2026-01-10T00:00:00"));
+  assert("6) Future actual prevention", futureBlocked && nonFutureAllowed, "Validation helper blocks future actual dates and allows today/past dates.");
 
   const t7 = cloneCampaign(base);
   const week1Start = parseDate(t7.idealTimeline.milestonePlan.contentPlan);
@@ -1769,7 +1783,7 @@ function runAcceptanceTests() {
 }
 
 function bindEvents() {
-  document.querySelectorAll("#campaignName,#contractStartDate,#contractEndDate,#kickoffDate,#extension30Days,#liveStage,#useBusinessDays,#showInterviewClient,#showProjectedOnCharts,#showLagOnCharts,#chartInternalView")
+  document.querySelectorAll("#campaignName,#contractStartDate,#contractEndDate,#kickoffDate,#extension30Days,#liveStage,#useBusinessDays,#showProjectedOnCharts,#showLagOnCharts,#chartInternalView")
     .forEach((el) => {
       el.addEventListener("change", () => {
         readFormToCampaign();
