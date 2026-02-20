@@ -310,7 +310,7 @@ function normalizeClause(text) {
 }
 
 function normalizeDate(text) {
-  return text.trim().replace(/^by\\s+/i, "");
+  return text.trim().replace(/^by\s+/i, "");
 }
 
 function ensureStartsWith(text, prefix) {

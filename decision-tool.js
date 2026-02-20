@@ -763,7 +763,8 @@ function gateEscalationText(option, checkpointIndex) {
   const escalatesAfter = option.escalatesAfterCheckpoints ?? 1;
   const nextIndex = Math.min(checkpoints.length - 1, checkpointIndex + escalatesAfter);
   const nextCheckpoint = checkpoints[nextIndex].title;
-  return `If unresolved by the 5 working day deadline, status moves to Behind. If still unresolved at ${nextCheckpoint}, keep escalating with timeline updates and client decision required.`;
+  const workingDays = option.responseDeadlineWorkingDays || 5;
+  return `If unresolved by the ${workingDays} working day deadline, status moves to Behind. If still unresolved at ${nextCheckpoint}, keep escalating with timeline updates and client decision required.`;
 }
 
 function formatDate(d) {
@@ -923,7 +924,7 @@ function campaignDayFromKo(ko) {
   return Math.floor((startToday - startKo) / (1000 * 60 * 60 * 24));
 }
 
-function suggestedCheckpointIndex(day) {
+function suggestedCheckpointIndex() {
   const ko = parseKoDate();
   if (!ko) return 0;
 
@@ -969,7 +970,7 @@ function renderKoContext() {
     return;
   }
 
-  const suggested = suggestedCheckpointIndex(day);
+  const suggested = suggestedCheckpointIndex();
   const checkpoint = checkpoints[suggested];
   const checkpointDate = koMilestoneDate(checkpoint.title, ko);
   koContext.textContent = `Today is Day ${day} from Kick-off (${formatDate(ko)}). You should be at ${checkpoint.title}${checkpointDate ? ` (${formatWeekCommencing(weekCommencing(checkpointDate))})` : ""}.`;
@@ -1150,8 +1151,7 @@ koDateInput.addEventListener("change", (e) => {
 jumpSuggested.addEventListener("click", () => {
   const ko = parseKoDate();
   if (!ko) return;
-  const day = campaignDayFromKo(ko);
-  state.index = suggestedCheckpointIndex(day);
+  state.index = suggestedCheckpointIndex();
   render();
 });
 
