@@ -48,6 +48,8 @@ const emptyMilestones = {
 const defaultCampaign = {
   schemaVersion: 2,
   campaignName: "",
+  clientBrand: "",
+  publication: "",
   baseline: {
     contractStartDate: "",
     contractEndDate: "",
@@ -286,6 +288,8 @@ function migrateToV2(parsed) {
   if (!parsed || typeof parsed !== "object") return migrated;
 
   migrated.campaignName = parsed.campaignName || "";
+  migrated.clientBrand = parsed.clientBrand || "";
+  migrated.publication = parsed.publication || "";
   migrated.settings.useBusinessDays = Boolean(parsed.settings?.useBusinessDays);
   migrated.settings.showProjectedOnCharts = Boolean(parsed.settings?.showProjectedOnCharts);
   migrated.settings.showLagOnCharts = parsed.settings?.showLagOnCharts !== false;
@@ -677,6 +681,39 @@ function policyStatusDisplay() {
   };
 }
 
+function policyCheckpointStatus(kind, now = new Date()) {
+  if (!campaign.baseline.kickoffDate) {
+    return { label: "Needs baseline", detail: "Set baseline dates first." };
+  }
+
+  const deadlineIso = kind === "day30"
+    ? campaign.policyLayer.firstPublishByDay30Deadline
+    : campaign.policyLayer.reportShareByDay90Deadline;
+  const deadline = parseDate(deadlineIso);
+  if (!deadline) {
+    return { label: "Needs baseline", detail: "Deadline not available yet." };
+  }
+
+  const weekEnd = weekEndSunday(deadline);
+  const actual = kind === "day30"
+    ? parseDate(campaign.actuals.milestoneActual.clientReview)
+    : parseDate(campaign.actuals.reportSharedActualDate || campaign.actuals.milestoneActual.reporting);
+  const shortName = kind === "day30" ? "Publish-ready" : "Report shared";
+
+  if (actual) {
+    if (actual <= weekEnd) {
+      return { label: "Meets window", detail: `${shortName} ${formatDate(actual)}. Target ${formatWc(deadline)}.` };
+    }
+    return { label: "Missed", detail: `${shortName} ${formatDate(actual)}. Target was ${formatWc(deadline)}.` };
+  }
+
+  if (startOfDay(now) > weekEnd) {
+    return { label: "Missed", detail: `Not completed by ${formatWc(deadline)}.` };
+  }
+
+  return { label: "On Track", detail: `Due ${formatWc(deadline)}.` };
+}
+
 function campaignStageStatus() {
   const stage = document.getElementById("liveStage")?.value || "Interview scheduling";
   const interviewDone = parseDate(campaign.actuals.milestoneActual.interview);
@@ -1014,7 +1051,12 @@ function renderTimelineVisual(viewMode, hostId) {
   // and reserve enough room for right-side labels in both modes.
   const right = 140;
   const laneTaskStart = 86;
-  const rowGap = 26;
+  const rowGap = 36;
+  const STEP_BAR_HEIGHT = 24;
+  const MILESTONE_HEIGHT = 24;
+  const LABEL_Y_OFFSET = 18;
+  const POLICY_LAG_BAR_Y = 70;
+  const POLICY_LAG_GAP = 14;
   const flowRows = viewMode === "client"
     ? [
       { type: "milestone", label: "Kick-off", key: "kickoff" },
@@ -1199,21 +1241,21 @@ function renderTimelineVisual(viewMode, hostId) {
         const pEnd = projectedAnchorDateFor(item.key);
         if (pEnd) {
           const px2 = xEndOf(pEnd);
-          projectedParts.push(`<rect class="vis-task ${stepPhaseClass}" x="${x1}" y="${y}" width="${Math.max(6, px2 - x1)}" height="12" rx="6" ry="6"/>`);
-          projectedParts.push(`<rect class="vis-plan-node" x="${xOf(pEnd) - 4}" y="${y}" width="10" height="12" rx="3" ry="3"/>`);
+          projectedParts.push(`<rect class="vis-task ${stepPhaseClass}" x="${x1}" y="${y}" width="${Math.max(6, px2 - x1)}" height="${STEP_BAR_HEIGHT}" rx="8" ry="8"/>`);
+          projectedParts.push(`<rect class="vis-plan-node" x="${xOf(pEnd) - 4}" y="${y}" width="10" height="${MILESTONE_HEIGHT}" rx="3" ry="3"/>`);
           maxXParts.push(px2);
           maxXParts.push(xOf(pEnd));
         }
       }
 
       if (showIdeal) {
-        rowObjects.push(`<rect class="vis-task ${stepPhaseClass}" x="${x1}" y="${y}" width="${Math.max(6, x2 - x1)}" height="12" rx="6" ry="6"/>`);
-        rowObjects.push(`<rect class="vis-plan-node" x="${xOf(planEnd) - 4}" y="${y}" width="10" height="12" rx="3" ry="3"/>`);
+        rowObjects.push(`<rect class="vis-task ${stepPhaseClass}" x="${x1}" y="${y}" width="${Math.max(6, x2 - x1)}" height="${STEP_BAR_HEIGHT}" rx="8" ry="8"/>`);
+        rowObjects.push(`<rect class="vis-plan-node" x="${xOf(planEnd) - 4}" y="${y}" width="10" height="${MILESTONE_HEIGHT}" rx="3" ry="3"/>`);
         maxXParts.push(x2);
         maxXParts.push(xOf(planEnd));
       }
       if (actualEnd && !(showProjected && !showIdeal)) {
-        rowObjects.push(`<rect class="vis-actual-node" x="${xOf(actualEnd) - 4}" y="${y}" width="10" height="12" rx="3" ry="3"/>`);
+        rowObjects.push(`<rect class="vis-actual-node" x="${xOf(actualEnd) - 4}" y="${y}" width="10" height="${MILESTONE_HEIGHT}" rx="3" ry="3"/>`);
         maxXParts.push(xOf(actualEnd));
       }
       if (showProjected && projectedEnd) {
@@ -1240,7 +1282,7 @@ function renderTimelineVisual(viewMode, hostId) {
       const visibleRightEdge = maxXParts.length ? Math.max(...maxXParts) : x2;
       const labelX = Math.min(visibleRightEdge + 8, width - right - 6);
       if (showIdeal || showProjected) {
-        rowObjects.push(`<text class="vis-bar-label" x="${labelX}" y="${y + 10}">${item.label}</text>`);
+        rowObjects.push(`<text class="vis-bar-label" x="${labelX}" y="${y + LABEL_Y_OFFSET}">${item.label}</text>`);
       }
 
       rowGroups.push(`<g class="vis-row-group">${projectedParts.join("")}${lagParts.join("")}${rowObjects.join("")}</g>`);
@@ -1262,30 +1304,29 @@ function renderTimelineVisual(viewMode, hostId) {
         if (pStart && pEnd) {
           const px1 = xStartOf(pStart);
           const px2 = xEndOf(pEnd);
-          projectedParts.push(`<rect class="vis-task ${stepPhaseClass}" x="${px1}" y="${y}" width="${Math.max(6, px2 - px1)}" height="12" rx="6" ry="6"/>`);
+          projectedParts.push(`<rect class="vis-task ${stepPhaseClass}" x="${px1}" y="${y}" width="${Math.max(6, px2 - px1)}" height="${STEP_BAR_HEIGHT}" rx="8" ry="8"/>`);
           labelAnchorX = px2;
           if (item.end === "promoting") {
-            const promoDays = Number.isFinite(campaign.derived.projectedPromotionDays)
-              ? campaign.derived.projectedPromotionDays
-              : Math.max(0, diffDays(pStart, pEnd) + 1);
+            // Keep label value aligned with the rendered projected bar length.
+            const promoDays = Math.max(0, diffDays(pStart, pEnd) + 1);
             const textX = px1 + ((Math.max(6, px2 - px1)) / 2);
-            insidePromoLabel = `<text class="vis-inside-bar-label" x="${textX}" y="${y + 9}" text-anchor="middle">${promoDays} days</text>`;
+            insidePromoLabel = `<text class="vis-inside-bar-label" x="${textX}" y="${y + 16}" text-anchor="middle">${promoDays} days</text>`;
           }
         }
       }
       if (showIdeal) {
-        rowObjects.push(`<rect class="vis-task ${stepPhaseClass}" x="${x1}" y="${y}" width="${w}" height="12" rx="6" ry="6"/>`);
+        rowObjects.push(`<rect class="vis-task ${stepPhaseClass}" x="${x1}" y="${y}" width="${w}" height="${STEP_BAR_HEIGHT}" rx="8" ry="8"/>`);
         labelAnchorX = x2;
         if (item.end === "promoting") {
           const promoDays = Math.max(0, diffDays(start, end) + 1);
           const textX = x1 + (w / 2);
-          insidePromoLabel = `<text class="vis-inside-bar-label" x="${textX}" y="${y + 9}" text-anchor="middle">${promoDays} days</text>`;
+          insidePromoLabel = `<text class="vis-inside-bar-label" x="${textX}" y="${y + 16}" text-anchor="middle">${promoDays} days</text>`;
         }
       }
       if (insidePromoLabel) rowObjects.push(insidePromoLabel);
       if (showIdeal || showProjected) {
         const visibleRightEdge = labelAnchorX ?? x2;
-        rowObjects.push(`<text class="vis-bar-label" x="${Math.min(visibleRightEdge + 6, width - right - 6)}" y="${y + 10}">${item.label}</text>`);
+        rowObjects.push(`<text class="vis-bar-label" x="${Math.min(visibleRightEdge + 6, width - right - 6)}" y="${y + LABEL_Y_OFFSET}">${item.label}</text>`);
       }
 
       const actualEnd = parseDate(campaign.actuals.milestoneActual[item.end]);
@@ -1320,12 +1361,12 @@ function renderTimelineVisual(viewMode, hostId) {
     const visibleRightEdge = labelCandidates.length ? Math.max(...labelCandidates) : 0;
     const labelX = Math.min(visibleRightEdge + 8, width - right - 6);
     if (showProjected && projectedForStep) {
-      projectedParts.push(`<rect class="vis-plan-node" x="${xOf(projectedForStep) - 4}" y="${y}" width="10" height="12" rx="3" ry="3"/>`);
+      projectedParts.push(`<rect class="vis-plan-node" x="${xOf(projectedForStep) - 4}" y="${y}" width="10" height="${MILESTONE_HEIGHT}" rx="3" ry="3"/>`);
     }
-    if (showIdeal && plan) rowObjects.push(`<rect class="vis-plan-node" x="${xOf(plan) - 4}" y="${y}" width="10" height="12" rx="3" ry="3"/>`);
-    if (actual && !(showProjected && !showIdeal)) rowObjects.push(`<rect class="vis-actual-node" x="${xOf(actual) - 4}" y="${y}" width="10" height="12" rx="3" ry="3"/>`);
+    if (showIdeal && plan) rowObjects.push(`<rect class="vis-plan-node" x="${xOf(plan) - 4}" y="${y}" width="10" height="${MILESTONE_HEIGHT}" rx="3" ry="3"/>`);
+    if (actual && !(showProjected && !showIdeal)) rowObjects.push(`<rect class="vis-actual-node" x="${xOf(actual) - 4}" y="${y}" width="10" height="${MILESTONE_HEIGHT}" rx="3" ry="3"/>`);
     if (showIdeal || showProjected || actual) {
-      rowObjects.push(`<text class="vis-milestone-label" x="${labelX}" y="${y + 10}">${item.label}</text>`);
+      rowObjects.push(`<text class="vis-milestone-label" x="${labelX}" y="${y + LABEL_Y_OFFSET}">${item.label}</text>`);
     }
 
     if (showLag && plan && actual) {
@@ -1383,8 +1424,8 @@ function renderTimelineVisual(viewMode, hostId) {
       const label = `P30 to ${publishLagSource}: ${lagText}`;
       const labelX = Math.min(Math.max(x1, x2) + 8, width - right - 6);
       return `
-        <rect class="${lagClass}" x="${barX}" y="40" width="${barW}" height="6" rx="3" ry="3"/>
-        <text class="vis-policy-lag-label" x="${labelX}" y="47">${label}</text>
+        <rect class="${lagClass}" x="${barX}" y="${POLICY_LAG_BAR_Y}" width="${barW}" height="6" rx="3" ry="3"/>
+        <text class="vis-policy-lag-label" x="${labelX}" y="${POLICY_LAG_BAR_Y + 9}">${label}</text>
       `;
     })()
     : "";
@@ -1404,8 +1445,8 @@ function renderTimelineVisual(viewMode, hostId) {
       const label = `P90 to ${reportLagSource}: ${lagText}`;
       const labelX = Math.min(Math.max(x1, x2) + 8, width - right - 6);
       return `
-        <rect class="${lagClass}" x="${barX}" y="50" width="${barW}" height="6" rx="3" ry="3"/>
-        <text class="vis-policy-lag-label" x="${labelX}" y="57">${label}</text>
+        <rect class="${lagClass}" x="${barX}" y="${POLICY_LAG_BAR_Y + POLICY_LAG_GAP}" width="${barW}" height="6" rx="3" ry="3"/>
+        <text class="vis-policy-lag-label" x="${labelX}" y="${POLICY_LAG_BAR_Y + POLICY_LAG_GAP + 9}">${label}</text>
       `;
     })()
     : "";
@@ -1427,14 +1468,19 @@ function renderTimelineVisual(viewMode, hostId) {
       ${contractExtensionEnd ? '<span><span class="key-line key-contract-extension"></span>Contract extension end</span>' : ""}
     `;
 
+  const timelineMeta = [campaign.clientBrand, campaign.publication].filter(Boolean).join(" • ");
   host.innerHTML = `
-    <div class="timeline-range">${formatDate(min)} -> ${formatDate(max)}</div>
+    <div class="timeline-head">
+      <div class="timeline-range">${formatDate(min)} -> ${formatDate(max)}</div>
+      ${timelineMeta ? `<div class="timeline-meta">${timelineMeta}</div>` : ""}
+    </div>
     <svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Ideal vs actual timeline">
       <line class="vis-axis" x1="${left}" y1="34" x2="${width - right}" y2="34"/>
-      ${weekLines.join("")}
-      ${phaseBands.join("")}
+      <!-- Keep vertical reference lines behind label text for readability. -->
       ${contractVisuals}
       ${policyVisuals}
+      ${weekLines.join("")}
+      ${phaseBands.join("")}
       ${policyPublishLagVisual}
       ${policyReportLagVisual}
       <line class="vis-lane" x1="${left}" y1="${laneTaskStart}" x2="${width - right}" y2="${laneTaskStart}"/>
@@ -1451,7 +1497,8 @@ function renderTimelineVisual(viewMode, hostId) {
 }
 
 function renderStatusAndFeasibility() {
-  const policy = policyStatusDisplay();
+  const day30Policy = policyCheckpointStatus("day30");
+  const day90Policy = policyCheckpointStatus("day90");
   const currentPlanLabel = campaign.derived.feasible ? campaign.derived.currentPlanStatus : "Behind";
 
   const cards = document.getElementById("statusCards");
@@ -1468,12 +1515,18 @@ function renderStatusAndFeasibility() {
       <div class="status-meta">${campaign.derived.feasibilityReason}</div>
     </div>
     <div class="status-card">
-      <h3>Internal deadline check</h3>
+      <h3>Day 30 publish check</h3>
       <div class="status-card-top">
-        <span class="badge ${statusClass(policy.label)}">${policy.label}</span>
+        <span class="badge ${statusClass(day30Policy.label)}">${day30Policy.label}</span>
       </div>
-      <div class="status-meta"><strong>Checks:</strong> publish-ready by Day 30 week and report shared by Day 90 week.</div>
-      <div class="status-meta">${policy.detail}</div>
+      <div class="status-meta">${day30Policy.detail}</div>
+    </div>
+    <div class="status-card">
+      <h3>Day 90 report check</h3>
+      <div class="status-card-top">
+        <span class="badge ${statusClass(day90Policy.label)}">${day90Policy.label}</span>
+      </div>
+      <div class="status-meta">${day90Policy.detail}</div>
     </div>
   `;
 
@@ -1547,6 +1600,8 @@ function renderRevisions() {
 
 function writeCampaignToForm() {
   document.getElementById("campaignName").value = campaign.campaignName;
+  document.getElementById("clientBrand").value = campaign.clientBrand || "";
+  document.getElementById("publication").value = campaign.publication || "";
   document.getElementById("contractStartDate").value = campaign.baseline.contractStartDate;
   document.getElementById("contractEndDate").value = campaign.baseline.contractEndDate;
   document.getElementById("kickoffDate").value = campaign.baseline.kickoffDate;
@@ -1565,6 +1620,8 @@ function writeCampaignToForm() {
 
 function readFormToCampaign() {
   campaign.campaignName = document.getElementById("campaignName").value.trim();
+  campaign.clientBrand = document.getElementById("clientBrand").value.trim();
+  campaign.publication = document.getElementById("publication").value;
   campaign.settings.useBusinessDays = document.getElementById("useBusinessDays").checked;
   campaign.settings.showProjectedOnCharts = document.getElementById("showProjectedOnCharts").checked;
   campaign.settings.showLagOnCharts = document.getElementById("showLagOnCharts").checked;
@@ -1589,6 +1646,8 @@ function exportJson() {
 function exportCsv() {
   const rows = [
     ["Campaign", campaign.campaignName || ""],
+    ["Client brand", campaign.clientBrand || ""],
+    ["Publication", campaign.publication || ""],
     ["Contract start", campaign.baseline.contractStartDate],
     ["Contract end", campaign.baseline.contractEndDate],
     ["Active contract end", campaign.derived.activeContractEndDate],
@@ -1622,12 +1681,50 @@ function downloadFile(name, content, type) {
   URL.revokeObjectURL(url);
 }
 
-function svgToPngDataUrl(svgEl) {
+function slugPart(value, fallback = "unknown") {
+  const normalized = String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return normalized || fallback;
+}
+
+function buildChartFilename(viewMode) {
+  const brand = slugPart(campaign.clientBrand || campaign.campaignName, "campaign");
+  const publication = slugPart(campaign.publication, "no-publication");
+  const start = slugPart(campaign.baseline.contractStartDate, "start-unknown");
+  const end = slugPart(campaign.baseline.contractEndDate, "end-unknown");
+  const mode = viewMode === "internal" ? "internal" : "client";
+  return `${brand}-${publication}-${start}-to-${end}-${mode}-timeline-chart.png`;
+}
+
+function svgToPngDataUrl(svgEl, scale = 2, exportContext = null) {
   return new Promise((resolve, reject) => {
     try {
       const clone = svgEl.cloneNode(true);
       if (!clone.getAttribute("xmlns")) clone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
       if (!clone.getAttribute("xmlns:xlink")) clone.setAttribute("xmlns:xlink", "http://www.w3.org/1999/xlink");
+
+      const viewBox = svgEl.viewBox?.baseVal;
+      const width = Math.max(1, Math.round(viewBox?.width || svgEl.clientWidth || 1400));
+      const height = Math.max(1, Math.round(viewBox?.height || svgEl.clientHeight || 450));
+      let topPad = 0;
+      let bottomPad = 0;
+      let keyLegend = [];
+      if (exportContext) {
+        topPad = exportContext.metaText ? 44 : 30;
+        keyLegend = Array.isArray(exportContext.keyItems) ? exportContext.keyItems : [];
+        if (keyLegend.length > 0) {
+          const rows = Math.ceil(keyLegend.length / 4);
+          bottomPad = 34 + (rows * 20);
+        }
+      }
+      const exportHeight = height + topPad + bottomPad;
+      // Lock explicit export dimensions so the full chart extents are captured.
+      clone.setAttribute("width", String(width));
+      clone.setAttribute("height", String(exportHeight));
+      clone.setAttribute("viewBox", `0 ${-topPad} ${width} ${exportHeight}`);
 
       // Inline computed styles so class-based CSS survives SVG->PNG export.
       const styleProps = [
@@ -1657,22 +1754,114 @@ function svgToPngDataUrl(svgEl) {
         node.setAttribute("style", `${existing}${inline}`);
       });
 
+      if (exportContext) {
+        const ns = "http://www.w3.org/2000/svg";
+        const bg = document.createElementNS(ns, "rect");
+        bg.setAttribute("x", "0");
+        bg.setAttribute("y", String(-topPad));
+        bg.setAttribute("width", String(width));
+        bg.setAttribute("height", String(exportHeight));
+        bg.setAttribute("fill", "#ffffff");
+        clone.insertBefore(bg, clone.firstChild);
+
+        const addText = (text, y, size = 12, weight = "700", color = "#25324a") => {
+          if (!text) return;
+          const t = document.createElementNS(ns, "text");
+          t.setAttribute("x", "24");
+          t.setAttribute("y", String(y));
+          t.setAttribute("fill", color);
+          t.setAttribute("font-size", String(size));
+          t.setAttribute("font-weight", String(weight));
+          t.setAttribute("font-family", "Manrope, sans-serif");
+          t.textContent = text;
+          clone.appendChild(t);
+        };
+
+        addText(exportContext.rangeText || "", -topPad + 18, 12, "700", "#1f2a3b");
+        addText(exportContext.metaText || "", -topPad + 34, 11, "600", "#4f607b");
+
+        if (keyLegend.length) {
+          const divider = document.createElementNS(ns, "line");
+          divider.setAttribute("x1", "24");
+          divider.setAttribute("y1", String(height + 10));
+          divider.setAttribute("x2", String(width - 24));
+          divider.setAttribute("y2", String(height + 10));
+          divider.setAttribute("stroke", "#d8e0ee");
+          divider.setAttribute("stroke-width", "1");
+          clone.appendChild(divider);
+          addText("Key", height + 28, 11, "700", "#4f607b");
+          const colWidth = (width - 48) / 4;
+          keyLegend.forEach((item, idx) => {
+            const row = Math.floor(idx / 4);
+            const col = idx % 4;
+            const baseX = 24 + (col * colWidth);
+            const y = height + 42 + (row * 20);
+
+            const addRect = (x, yy, w, h, fill, stroke = "none", rx = 0) => {
+              const r = document.createElementNS(ns, "rect");
+              r.setAttribute("x", String(x));
+              r.setAttribute("y", String(yy));
+              r.setAttribute("width", String(w));
+              r.setAttribute("height", String(h));
+              if (rx) {
+                r.setAttribute("rx", String(rx));
+                r.setAttribute("ry", String(rx));
+              }
+              r.setAttribute("fill", fill);
+              if (stroke !== "none") {
+                r.setAttribute("stroke", stroke);
+                r.setAttribute("stroke-width", "1");
+              }
+              clone.appendChild(r);
+            };
+            const addLine = (x1, yy1, x2, yy2, stroke, widthPx = 2, dash = "") => {
+              const l = document.createElementNS(ns, "line");
+              l.setAttribute("x1", String(x1));
+              l.setAttribute("y1", String(yy1));
+              l.setAttribute("x2", String(x2));
+              l.setAttribute("y2", String(yy2));
+              l.setAttribute("stroke", stroke);
+              l.setAttribute("stroke-width", String(widthPx));
+              if (dash) l.setAttribute("stroke-dasharray", dash);
+              clone.appendChild(l);
+            };
+
+            const type = item?.type || "";
+            if (type === "key-step") addRect(baseX, y - 8, 16, 10, "rgba(120,152,199,0.55)", "rgba(33,76,144,0.65)", 5);
+            else if (type === "key-milestone") addRect(baseX + 3, y - 9, 10, 12, "#30908b", "none", 3);
+            else if (type === "key-projected-bar") addRect(baseX, y - 8, 14, 10, "rgba(112,118,138,0.34)", "rgba(112,118,138,0.58)", 4);
+            else if (type === "key-policy") addLine(baseX, y - 3, baseX + 14, y - 3, "#d64545", 2, "5 4");
+            else if (type === "key-policy-90") addLine(baseX, y - 3, baseX + 14, y - 3, "#a02872", 2, "5 4");
+            else if (type === "key-projected") addLine(baseX, y - 3, baseX + 14, y - 3, "#e6852e", 2, "4 3");
+            else if (type === "key-contract-start") addLine(baseX, y - 3, baseX + 14, y - 3, "#2a7a2f", 3);
+            else if (type === "key-contract-end") addLine(baseX, y - 3, baseX + 14, y - 3, "#7a1f1f", 3);
+            else if (type === "key-contract-extension") addLine(baseX, y - 3, baseX + 14, y - 3, "#7a1f1f", 3, "8 5");
+            else addRect(baseX + 4, y - 7, 8, 8, "#60708f", "none", 4);
+
+            addText(item?.label || "", y, 10, "600", "#2f3e58");
+            const lastText = clone.lastChild;
+            if (lastText?.tagName === "text") lastText.setAttribute("x", String(baseX + 22));
+          });
+        }
+      }
+
       const serializer = new XMLSerializer();
       const svgMarkup = serializer.serializeToString(clone);
       const svgBlob = new Blob([svgMarkup], { type: "image/svg+xml;charset=utf-8" });
       const url = URL.createObjectURL(svgBlob);
       const img = new Image();
       img.onload = () => {
-        const viewBox = svgEl.viewBox?.baseVal;
-        const width = Math.max(1, Math.round(viewBox?.width || svgEl.clientWidth || 1400));
-        const height = Math.max(1, Math.round(viewBox?.height || svgEl.clientHeight || 450));
+        const safeScale = Math.max(1, Number(scale) || 1);
         const canvas = document.createElement("canvas");
-        canvas.width = width;
-        canvas.height = height;
+        canvas.width = Math.round(width * safeScale);
+        canvas.height = Math.round(exportHeight * safeScale);
         const ctx = canvas.getContext("2d");
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = "high";
+        ctx.setTransform(safeScale, 0, 0, safeScale, 0, 0);
         ctx.fillStyle = "#ffffff";
-        ctx.fillRect(0, 0, width, height);
-        ctx.drawImage(img, 0, 0, width, height);
+        ctx.fillRect(0, 0, width, exportHeight);
+        ctx.drawImage(img, 0, 0, width, exportHeight);
         URL.revokeObjectURL(url);
         resolve(canvas.toDataURL("image/png"));
       };
@@ -1695,7 +1884,33 @@ async function downloadChartImage(hostId, filename) {
     return;
   }
   try {
-    const dataUrl = await svgToPngDataUrl(svg);
+    const rangeText = host.querySelector(".timeline-range")?.textContent?.trim() || "";
+    const metaText = host.querySelector(".timeline-meta")?.textContent?.trim() || "";
+    const keyItems = Array.from(document.querySelectorAll(".timeline-key > span"))
+      .map((el) => {
+        const label = el.textContent?.trim() || "";
+        if (!label) return null;
+        const symbolEl = el.querySelector("span");
+        const classes = symbolEl ? Array.from(symbolEl.classList) : [];
+        const preferred = [
+          "key-step",
+          "key-milestone",
+          "key-projected-bar",
+          "key-policy",
+          "key-policy-90",
+          "key-projected",
+          "key-contract-start",
+          "key-contract-end",
+          "key-contract-extension"
+        ];
+        const type = preferred.find((cls) => classes.includes(cls))
+          || classes.find((cls) => cls.startsWith("key-") && cls !== "key-line" && cls !== "key-swatch")
+          || classes.find((cls) => cls.startsWith("key-"))
+          || "";
+        return { label, type };
+      })
+      .filter(Boolean);
+    const dataUrl = await svgToPngDataUrl(svg, 3, { rangeText, metaText, keyItems });
     const a = document.createElement("a");
     a.href = dataUrl;
     a.download = filename;
@@ -1783,7 +1998,7 @@ function runAcceptanceTests() {
 }
 
 function bindEvents() {
-  document.querySelectorAll("#campaignName,#contractStartDate,#contractEndDate,#kickoffDate,#extension30Days,#liveStage,#useBusinessDays,#showProjectedOnCharts,#showLagOnCharts,#chartInternalView")
+  document.querySelectorAll("#campaignName,#clientBrand,#publication,#contractStartDate,#contractEndDate,#kickoffDate,#extension30Days,#liveStage,#useBusinessDays,#showProjectedOnCharts,#showLagOnCharts,#chartInternalView")
     .forEach((el) => {
       el.addEventListener("change", () => {
         readFormToCampaign();
@@ -1800,7 +2015,8 @@ function bindEvents() {
   document.getElementById("exportCsv").addEventListener("click", exportCsv);
   document.getElementById("downloadMainChart").addEventListener("click", () => {
     const internal = Boolean(campaign.settings.chartInternalView);
-    downloadChartImage("timelineVisualMain", internal ? "internal-timeline-chart.png" : "client-timeline-chart.png");
+    const mode = internal ? "internal" : "client";
+    downloadChartImage("timelineVisualMain", buildChartFilename(mode));
   });
   document.getElementById("runTests").addEventListener("click", runAcceptanceTests);
 
