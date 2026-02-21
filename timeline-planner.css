@@ -2,8 +2,16 @@
   grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
 }
 
+.impact-panel {
+  padding: 0;
+}
+
+.impact-body {
+  margin-top: 0;
+}
+
 .card-header {
-  border-bottom: 1px solid rgba(120, 138, 170, 0.22);
+  border-bottom: none;
   padding-bottom: 10px;
 }
 
@@ -22,11 +30,20 @@
   color: #2d3a52;
 }
 
+.label-text {
+  display: inline-block;
+}
+
+.required-star {
+  color: #c93030;
+  font-weight: 800;
+}
+
 .form-grid input,
 .form-grid select {
   width: 100%;
   padding: 10px 12px;
-  border-radius: 10px;
+  border-radius: 5px;
   border: 1px solid var(--border);
   font-family: "Manrope", sans-serif;
   font-size: 14px;
@@ -88,8 +105,8 @@
 }
 
 .status-card {
-  border: 1px solid var(--border);
-  border-radius: 16px;
+  border: none;
+  border-radius: 6px;
   padding: 14px;
   background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
   box-shadow: 0 8px 20px rgba(20, 33, 52, 0.06);
@@ -168,7 +185,7 @@
 .milestone-table input {
   width: 100%;
   padding: 8px;
-  border-radius: 8px;
+  border-radius: 6px;
   border: 1px solid var(--border);
   font-family: "Manrope", sans-serif;
 }
@@ -206,7 +223,7 @@
 
 .timeline-item {
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: 6px;
   padding: 10px;
   background: #f8fbff;
 }
@@ -228,8 +245,8 @@
 }
 
 .timeline-visual {
-  border: 1px solid var(--border);
-  border-radius: 12px;
+  border: none;
+  border-radius: 6px;
   background: #fff;
   padding: 6px 6px 8px;
   margin-bottom: 12px;
@@ -347,7 +364,7 @@
 .slider {
   position: absolute;
   inset: 0;
-  border-radius: 999px;
+  border-radius: 6px;
   background: #c7ccda;
   transition: background-color 0.2s ease;
 }
@@ -359,7 +376,7 @@
   width: 18px;
   left: 3px;
   top: 3px;
-  border-radius: 50%;
+  border-radius: 6px;
   background: #fff;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.28);
   transition: transform 0.2s ease;
@@ -381,7 +398,7 @@
 .key-swatch {
   width: 14px;
   height: 10px;
-  border-radius: 4px;
+  border-radius: 6px;
   border: 1px solid transparent;
 }
 
@@ -397,7 +414,7 @@
 .key-milestone {
   width: 10px;
   height: 12px;
-  border-radius: 3px;
+  border-radius: 6px;
   background: #30908b;
   display: inline-block;
 }
@@ -420,7 +437,7 @@
 .key-dot {
   width: 8px;
   height: 8px;
-  border-radius: 999px;
+  border-radius: 6px;
   display: inline-block;
 }
 
@@ -558,6 +575,11 @@
   stroke-width: 1.2;
 }
 
+.vis-task.vis-forecast {
+  stroke-dasharray: 6 4;
+  stroke-width: 1.6;
+}
+
 .vis-step-prod {
   fill: rgba(48, 144, 139, 0.38);
   stroke: rgba(30, 102, 98, 0.95);
@@ -575,6 +597,12 @@
 
 .vis-plan-node {
   fill: #30908b;
+}
+
+.vis-plan-node.vis-forecast {
+  stroke: rgba(31, 76, 147, 0.95);
+  stroke-width: 1.4;
+  stroke-dasharray: 3 2;
 }
 
 .vis-actual-node {
@@ -714,7 +742,7 @@
 .primary-action {
   border: 1px solid rgba(48, 144, 139, 0.35);
   background: linear-gradient(180deg, #f7fbff 0%, #eef5ff 100%);
-  border-radius: 12px;
+  border-radius: 6px;
   padding: 12px;
   margin-bottom: 10px;
   font-size: 14px;
@@ -728,7 +756,7 @@
 
 .advanced-panel {
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: 6px;
   padding: 8px 10px;
   background: rgba(27, 28, 55, 0.03);
 }
@@ -751,7 +779,7 @@
 
 .revision-item {
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: 6px;
   padding: 10px;
   margin-bottom: 8px;
   background: #fbfdff;
@@ -777,13 +805,13 @@
 
 .phase-bar-wrap {
   background: rgba(27, 28, 55, 0.06);
-  border-radius: 999px;
+  border-radius: 6px;
   padding: 2px;
 }
 
 .phase-bar {
   background: linear-gradient(90deg, rgba(48, 144, 139, 0.22), rgba(48, 144, 139, 0.45));
-  border-radius: 999px;
+  border-radius: 6px;
   padding: 7px 12px;
   font-size: 12px;
   font-weight: 600;
@@ -793,7 +821,7 @@
 .delta-chip {
   display: inline-block;
   border: 1px solid rgba(27, 28, 55, 0.2);
-  border-radius: 999px;
+  border-radius: 6px;
   padding: 2px 8px;
   font-size: 12px;
   font-weight: 600;
