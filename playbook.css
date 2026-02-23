@@ -40,8 +40,8 @@ body {
 
 .hero {
   background: linear-gradient(180deg, #ffffff 0%, #fbfcff 100%);
-  border-radius: 20px;
-  border: 1px solid var(--border);
+  border-radius: 10px;
+  border: none;
   padding: 32px;
   box-shadow: var(--shadow);
   margin-bottom: 28px;
@@ -49,7 +49,7 @@ body {
 
 .status-section {
   background: var(--white);
-  border-radius: 20px;
+  border-radius: 5px;
   padding: 20px 24px;
   box-shadow: var(--shadow);
   margin-bottom: 24px;
@@ -70,19 +70,20 @@ body {
 .nav-link {
   text-decoration: none;
   padding: 9px 16px;
-  border-radius: 999px;
-  border: 1px solid #d7dfed;
+  border-radius: 6px;
+  border: none;
   color: var(--text);
   font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.01em;
-  background: #f5f8ff;
+  background: #eef3ff;
+  box-shadow: 0 1px 0 rgba(21, 35, 61, 0.08), 0 2px 8px rgba(21, 35, 61, 0.06);
 }
 
 .nav-link.active {
   background: var(--primary);
   color: var(--white);
-  border-color: var(--primary);
+  box-shadow: 0 2px 10px rgba(27, 40, 64, 0.28);
 }
 
 .brand {
@@ -94,7 +95,7 @@ body {
 .logo {
   width: 72px;
   height: 72px;
-  border-radius: 16px;
+  border-radius: 6px;
   background: linear-gradient(145deg, #1f2940 0%, #3f557f 100%);
   padding: 8px;
 }
@@ -131,7 +132,7 @@ h1 {
 
 .status-chip {
   padding: 7px 14px;
-  border-radius: 999px;
+  border-radius: 6px;
   font-size: 11px;
   font-weight: 700;
   border: 1px solid transparent;
@@ -200,7 +201,7 @@ h1 {
 textarea {
   width: 100%;
   padding: 11px 13px;
-  border-radius: 12px;
+  border-radius: 6px;
   border: 1px solid #d8e0ee;
   font-family: "Manrope", sans-serif;
   font-size: 14px;
@@ -221,8 +222,8 @@ textarea {
 
 .card {
   background: var(--white);
-  border-radius: 22px;
-  border: 1px solid var(--border);
+  border-radius: 11px;
+  border: none;
   box-shadow: var(--shadow);
   padding: 24px;
 }
@@ -254,7 +255,7 @@ textarea {
 .trigger-button {
   cursor: pointer;
   border: 1px solid var(--border);
-  border-radius: 14px;
+  border-radius: 7px;
   padding: 12px;
   background: #fcfdff;
   text-align: left;
@@ -298,7 +299,7 @@ textarea {
 .badge {
   display: inline-block;
   padding: 4px 10px;
-  border-radius: 999px;
+  border-radius: 6px;
   font-size: 10px;
   font-weight: 700;
   text-transform: uppercase;
@@ -311,7 +312,7 @@ textarea {
   display: inline-block;
   margin-left: 8px;
   padding: 2px 8px;
-  border-radius: 999px;
+  border-radius: 6px;
   font-size: 11px;
   background: rgba(27, 28, 55, 0.08);
 }
@@ -323,7 +324,7 @@ textarea {
 
 .timeline-item {
   border: 1px solid var(--border);
-  border-radius: 16px;
+  border-radius: 6px;
   padding: 14px;
   background: #fefeff;
 }
@@ -358,7 +359,7 @@ textarea {
   background: #f6f9ff;
   color: var(--text);
   padding: 6px 12px;
-  border-radius: 999px;
+  border-radius: 6px;
   cursor: pointer;
   font-size: 12px;
   font-weight: 600;
@@ -374,7 +375,7 @@ textarea {
   border-left: 4px solid rgba(27, 28, 55, 0.2);
   padding: 12px 16px;
   background: #f7f7fb;
-  border-radius: 16px;
+  border-radius: 6px;
   margin-bottom: 12px;
 }
 
@@ -413,7 +414,7 @@ textarea {
 
 .structure-item {
   border: 1px solid var(--border);
-  border-radius: 14px;
+  border-radius: 7px;
   padding: 12px;
   margin-bottom: 10px;
   background: #fdfdff;
@@ -435,7 +436,7 @@ textarea {
 
 .guided-block {
   border: 1px solid var(--border);
-  border-radius: 16px;
+  border-radius: 6px;
   padding: 12px;
   margin-bottom: 12px;
   background: #fdfdff;
@@ -483,7 +484,7 @@ textarea {
   gap: 8px;
   padding: 8px;
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: 6px;
   background: #f7f7fb;
 }
 
@@ -504,7 +505,7 @@ textarea {
 
 .decision-grid input {
   padding: 10px 12px;
-  border-radius: 12px;
+  border-radius: 6px;
   border: 1px solid var(--border);
   font-family: "Manrope", sans-serif;
   font-size: 13px;
@@ -538,7 +539,7 @@ textarea {
   background: var(--primary);
   color: var(--white);
   border: none;
-  border-radius: 12px;
+  border-radius: 6px;
   font-weight: 600;
   cursor: pointer;
   box-shadow: 0 8px 18px rgba(28, 36, 51, 0.2);
@@ -551,7 +552,7 @@ textarea {
 .primary-link {
   display: inline-block;
   padding: 12px 16px;
-  border-radius: 12px;
+  border-radius: 6px;
   background: var(--primary);
   color: var(--white);
   text-decoration: none;
@@ -568,7 +569,7 @@ textarea {
   gap: 12px;
   align-items: flex-start;
   padding: 12px;
-  border-radius: 14px;
+  border-radius: 7px;
   background: linear-gradient(140deg, rgba(48, 144, 139, 0.12), rgba(27, 28, 55, 0.08));
   margin-bottom: 12px;
 }
@@ -577,7 +578,7 @@ textarea {
   width: 32px;
   height: 32px;
   min-width: 32px;
-  border-radius: 10px;
+  border-radius: 5px;
   background: var(--primary);
   color: var(--white);
   font-weight: 600;
@@ -597,7 +598,7 @@ textarea {
   padding: 8px 12px;
   border: 1px solid var(--border);
   background: #f8faff;
-  border-radius: 10px;
+  border-radius: 5px;
   cursor: pointer;
   color: #2a354a;
 }
@@ -609,7 +610,7 @@ textarea {
 .builder-output {
   background: #fdfdff;
   border: 1px solid var(--border);
-  border-radius: 16px;
+  border-radius: 6px;
   padding: 16px;
 }
 

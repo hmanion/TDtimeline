@@ -31,8 +31,8 @@
     <section class="grid planner-grid">
       <article class="card">
         <header class="card-header">
-          <h2>Baseline Setup (Locked)</h2>
-          <p>Enter contracted dates and KO once, then lock them. These dates drive the ideal timeline.</p>
+          <h2>Baseline Inputs</h2>
+          <p>Enter contracted dates and KO once, then lock them. These dates drive the initial timeline.</p>
         </header>
         <div class="card-body form-grid">
           <label class="full-row">Campaign name
@@ -51,14 +51,14 @@
             </label>
           </div>
           <div class="date-pair">
-            <label>Contract start date (required)
+            <label><span class="label-text">Contract start date<span class="required-star">*</span></span>
               <input id="contractStartDate" type="date" />
             </label>
-            <label>Contract end date (required)
+            <label><span class="label-text">Contract end date<span class="required-star">*</span></span>
               <input id="contractEndDate" type="date" />
             </label>
           </div>
-          <label>Kick-off call date (required)
+          <label><span class="label-text">Kick-off call date<span class="required-star">*</span></span>
             <input id="kickoffDate" type="date" />
           </label>
           <div class="extension-pair">
@@ -71,26 +71,22 @@
           <span id="baselineLockState" class="save-hint"></span>
         </div>
       </article>
-      <article class="card">
-        <header class="card-header">
-          <h2>Impact + Feasibility</h2>
-          <p>See policy status, plan viability, and latest timeline impact.</p>
-        </header>
-        <div class="card-body">
+      <section class="impact-panel">
+        <div class="impact-body">
           <div id="statusCards" class="status-cards"></div>
           <div class="impact-wrap">
             <h3 class="mini-title">Latest Impact</h3>
             <div id="impactSummary"></div>
           </div>
         </div>
-      </article>
+      </section>
     </section>
 
     <section class="grid">
       <article class="card full">
         <header class="card-header">
-          <h2>Workflow Plan, Progress, And Projection</h2>
-          <p>Use one view for ideal windows, actual completion dates, variance, and projected completion.</p>
+          <h2>Workflow Plan</h2>
+          <p>Use one view for initial windows, actual completion dates, variance, and current completion.</p>
         </header>
         <div class="card-body">
           <div id="workflowTrackerTable"></div>
@@ -101,7 +97,7 @@
     <section class="grid">
       <article class="card full">
         <header class="card-header">
-          <h2>Timeline Preview (Gantt)</h2>
+          <h2>Timeline</h2>
           <p>Full-width phase bands for Production, Promotion, and Reporting, with workflow timing and completion markers.</p>
         </header>
         <div class="card-body">
@@ -117,9 +113,9 @@
               <span class="toggle-side">Lag on</span>
             </label>
             <label class="toggle-row toggle-pair">
-              <span class="toggle-side">Ideal timeline</span>
+              <span class="toggle-side">Initial timeline</span>
               <span class="switch"><input id="showProjectedOnCharts" type="checkbox" /><span class="slider"></span></span>
-              <span class="toggle-side">Projected timeline</span>
+              <span class="toggle-side">Current timeline</span>
             </label>
           </div>
           <div id="timelineVisualMain" class="timeline-visual"></div>
@@ -133,24 +129,8 @@
     <section class="grid">
       <article class="card full">
         <header class="card-header">
-          <h2>Next CSM Actions</h2>
-          <p>Clear actions based on current campaign position.</p>
-        </header>
-        <div class="card-body">
-          <label>Current campaign stage
-            <select id="liveStage"></select>
-          </label>
-          <div id="primaryAction" class="primary-action"></div>
-          <ul id="csmActions" class="rec-list"></ul>
-        </div>
-      </article>
-    </section>
-
-    <section class="grid">
-      <article class="card full">
-        <header class="card-header">
           <h2>Outputs</h2>
-          <p>Export baseline + ideal + actual timeline data, or capture a revision snapshot.</p>
+          <p>Export baseline + initial + actual timeline data, or capture a revision snapshot.</p>
         </header>
         <div class="card-body actions-row">
           <button id="createRevision" class="primary-link" type="button">Create revision snapshot</button>
@@ -166,7 +146,7 @@
       <article class="card full">
         <header class="card-header">
           <h2>Revisions</h2>
-          <p>Snapshots preserve baseline, policy, and projected state over time.</p>
+          <p>Snapshots preserve baseline, policy, and current state over time.</p>
         </header>
         <div class="card-body" id="revisionsList"></div>
       </article>

@@ -21,17 +21,8 @@ const milestoneLabels = {
   clientReview: "Client review",
   publishing: "Publishing",
   promoting: "Promoting",
-  reporting: "Reporting"
+  reporting: "Report"
 };
-
-const liveStages = [
-  "Interview scheduling",
-  "In production",
-  "In review",
-  "Publishing",
-  "Promoting",
-  "Reporting"
-];
 
 const emptyMilestones = {
   kickoff: "",
@@ -77,6 +68,7 @@ const defaultCampaign = {
   },
   actuals: {
     milestoneActual: { ...emptyMilestones },
+    milestoneProjected: { ...emptyMilestones },
     firstPublishActualDate: "",
     reportSharedActualDate: ""
   },
@@ -313,7 +305,8 @@ function migrateToV2(parsed) {
       actuals: {
         ...migrated.actuals,
         ...(parsed.actuals || {}),
-        milestoneActual: mergeMilestones(parsed.actuals?.milestoneActual)
+        milestoneActual: mergeMilestones(parsed.actuals?.milestoneActual),
+        milestoneProjected: mergeMilestones(parsed.actuals?.milestoneProjected)
       },
       derived: {
         ...migrated.derived,
@@ -355,6 +348,7 @@ function migrateToV2(parsed) {
 
   migrated.idealTimeline.milestonePlan = mergeMilestones(mapLegacy(legacyMilestones));
   migrated.actuals.milestoneActual = mergeMilestones(mapLegacy(legacyActuals));
+  migrated.actuals.milestoneProjected = mergeMilestones();
   migrated.actuals.firstPublishActualDate = parsed.firstPublishDate || legacyActuals.contentPublished || legacyActuals.publishing || "";
   migrated.actuals.reportSharedActualDate = parsed.reportSharedDate || legacyActuals.reportingDelivered || legacyActuals.reporting || "";
 
@@ -486,10 +480,25 @@ function phaseDurationDays(c, phaseName) {
   return Math.max(0, diffDays(start, end) + 1);
 }
 
+function currentCompletionIso(c, key) {
+  if (key === "kickoff") {
+    return c.baseline.kickoffDate
+      || c.derived?.projectedMilestones?.kickoff
+      || c.idealTimeline?.milestonePlan?.kickoff
+      || "";
+  }
+  return c.actuals?.milestoneActual?.[key]
+    || c.actuals?.milestoneProjected?.[key]
+    || c.derived?.projectedMilestones?.[key]
+    || c.idealTimeline?.milestonePlan?.[key]
+    || "";
+}
+
 function computeProjectedMilestones(c) {
   const projected = { ...emptyMilestones };
   const ideal = c.idealTimeline.milestonePlan;
   const actual = c.actuals.milestoneActual;
+  const projectedInput = mergeMilestones(c.actuals.milestoneProjected);
   const activeEnd = activeContractEndDate(c);
 
   const ko = parseDate(c.baseline.kickoffDate);
@@ -501,12 +510,17 @@ function computeProjectedMilestones(c) {
     const key = milestoneOrder[i];
     const prevKey = milestoneOrder[i - 1];
     const actualDate = parseDate(actual[key]);
+    const projectedInputDate = parseDate(projectedInput[key]);
     const idealDate = parseDate(ideal[key]);
     const prevProjected = parseDate(projected[prevKey]);
     const prevIdeal = parseDate(ideal[prevKey]);
 
     if (actualDate) {
       projected[key] = toIso(workingDayOnOrAfter(actualDate));
+      continue;
+    }
+    if (projectedInputDate) {
+      projected[key] = toIso(workingDayOnOrAfter(projectedInputDate));
       continue;
     }
 
@@ -575,7 +589,7 @@ function computeDerived(c, now = new Date()) {
     derived.feasible = promotionDays >= 30;
     derived.feasibilityReason = derived.feasible
       ? `Promotion window remains ${promotionDays} day(s).`
-      : `No longer feasible: projected promotion window is ${promotionDays} day(s), below 30-day minimum.`;
+      : `No longer feasible: current promotion window is ${promotionDays} day(s), below 30-day minimum.`;
   }
 
   const ko = parseDate(c.baseline.kickoffDate);
@@ -653,32 +667,11 @@ function baselineInputDisabled() {
 
 function statusClass(status) {
   if (status === "On Track" || status === "Meets window") return "status-ontrack";
-  if (status === "At Risk") return "status-risk";
+  if (status === "At Risk" || status === "Projected to miss") return "status-risk";
   if (status === "Behind") return "status-behind";
   if (status === "Missed") return "status-critical";
   if (status === "Critical") return "status-critical";
   return "status-hold";
-}
-
-function policyStatusDisplay() {
-  if (!campaign.baseline.kickoffDate) {
-    return {
-      label: "Needs baseline",
-      detail: "Set baseline dates to calculate policy windows."
-    };
-  }
-
-  if (campaign.policyLayer.policyMissedPermanent) {
-    return {
-      label: "Missed",
-      detail: `Permanent policy miss: ${campaign.policyLayer.policyMissReason || "Policy window breached."}`
-    };
-  }
-
-  return {
-    label: "Meets window",
-    detail: `Publish-ready week: ${campaign.policyLayer.publishReadyWeekDeadline || "TBC"}. Report-share week: ${campaign.policyLayer.reportShareWeekDeadline || "TBC"}.`
-  };
 }
 
 function policyCheckpointStatus(kind, now = new Date()) {
@@ -695,40 +688,50 @@ function policyCheckpointStatus(kind, now = new Date()) {
   }
 
   const weekEnd = weekEndSunday(deadline);
-  const actual = kind === "day30"
-    ? parseDate(campaign.actuals.milestoneActual.clientReview)
-    : parseDate(campaign.actuals.reportSharedActualDate || campaign.actuals.milestoneActual.reporting);
+  const key = kind === "day30" ? "clientReview" : "reporting";
+  const completion = parseDate(currentCompletionIso(campaign, key));
+  const hasActual = kind === "day30"
+    ? Boolean(parseDate(campaign.actuals.milestoneActual.clientReview))
+    : Boolean(parseDate(campaign.actuals.reportSharedActualDate || campaign.actuals.milestoneActual.reporting));
   const shortName = kind === "day30" ? "Publish-ready" : "Report shared";
-
-  if (actual) {
-    if (actual <= weekEnd) {
-      return { label: "Meets window", detail: `${shortName} ${formatDate(actual)}. Target ${formatWc(deadline)}.` };
-    }
-    return { label: "Missed", detail: `${shortName} ${formatDate(actual)}. Target was ${formatWc(deadline)}.` };
-  }
-
-  if (startOfDay(now) > weekEnd) {
-    return { label: "Missed", detail: `Not completed by ${formatWc(deadline)}.` };
-  }
-
-  return { label: "On Track", detail: `Due ${formatWc(deadline)}.` };
-}
-
-function campaignStageStatus() {
-  const stage = document.getElementById("liveStage")?.value || "Interview scheduling";
-  const interviewDone = parseDate(campaign.actuals.milestoneActual.interview);
-  if (["In production", "In review", "Publishing", "Promoting", "Reporting"].includes(stage) && !interviewDone) {
-    return {
-      label: "Critical",
-      detail: "Interview is not completed, so production flow is blocked.",
-      stage
-    };
-  }
-  return {
-    label: "On Track",
-    detail: `Current stage: ${stage}.`,
-    stage
+  const sourceLabel = hasActual ? "Actual" : "Current";
+  const nowDay = startOfDay(now);
+  const pastDeadline = nowDay > weekEnd;
+  const formatDateNoYear = (dateOrIso) => {
+    const d = typeof dateOrIso === "string" ? parseDate(dateOrIso) : dateOrIso;
+    if (!d) return "TBC";
+    return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
   };
+  const targetWc = `W/c ${formatDateNoYear(weekStartMonday(deadline))}`;
+  const lateDaysText = (date) => {
+    const lateDays = Math.max(0, diffDays(deadline, date));
+    return `${lateDays} day${lateDays === 1 ? "" : "s"}`;
+  };
+  const missedDetail = (date) => (kind === "day30"
+    ? `Content was ready to publish on ${formatDateNoYear(date)}, ${lateDaysText(date)} after target date in ${targetWc}.`
+    : `Report was shared on ${formatDateNoYear(date)}, ${lateDaysText(date)} after target date in ${targetWc}.`);
+  const projectedMissDetail = (date) => (kind === "day30"
+    ? `Content is projected to be publish-ready on ${formatDateNoYear(date)}, ${lateDaysText(date)} after target date in ${targetWc}.`
+    : `Report is projected to be shared on ${formatDateNoYear(date)}, ${lateDaysText(date)} after target date in ${targetWc}.`);
+
+  if (completion) {
+    if (completion <= weekEnd) {
+      if (!hasActual && pastDeadline) {
+        return { label: "Missed", detail: `No actual ${shortName.toLowerCase()} was recorded by target week ${targetWc}.` };
+      }
+      return { label: "Meets window", detail: `${sourceLabel} ${shortName.toLowerCase()} ${formatDateNoYear(completion)}. Target ${targetWc}.` };
+    }
+    if (hasActual || pastDeadline) {
+      return { label: "Missed", detail: hasActual ? missedDetail(completion) : `No actual ${shortName.toLowerCase()} was recorded by target week ${targetWc}.` };
+    }
+    return { label: "Projected to miss", detail: projectedMissDetail(completion) };
+  }
+
+  if (pastDeadline) {
+    return { label: "Missed", detail: `No actual ${shortName.toLowerCase()} was recorded by target week ${targetWc}.` };
+  }
+
+  return { label: "On Track", detail: `Due ${targetWc}.` };
 }
 
 function renderBaselineCard() {
@@ -746,7 +749,7 @@ function renderBaselineCard() {
   unlockBtn.disabled = !locked;
   lockState.textContent = locked
     ? "Baseline is locked. Contract dates and KO are read-only."
-    : "Baseline is unlocked. Set dates, then lock to generate the ideal timeline.";
+    : "Baseline is unlocked. Set dates, then lock to generate the initial timeline.";
 }
 
 function phaseRangeText(phase) {
@@ -793,24 +796,24 @@ function renderIdealTimeline() {
     promoting: wcRange(promotionStartDate, promotionEndDate),
     reporting: wcRange(reportingStartDate, reportingEndDate)
   };
-  const projected = campaign.derived.projectedMilestones || {};
-  const getProjected = (key) => projected[key] || campaign.idealTimeline.milestonePlan[key] || "";
-  const today = todayIso();
+  const projectedInput = mergeMilestones(campaign.actuals.milestoneProjected);
 
   table.innerHTML = `
     <table class="milestone-table">
       <thead>
-        <tr><th>Workflow step</th><th>Ideal window</th><th>Deadline</th><th>Actual completion date</th><th>Projected completion</th><th>Variance</th></tr>
+        <tr><th>Workflow step</th><th>Initial window</th><th>Deadline</th><th>Actual completion date</th><th>Current completion</th><th>Variance</th></tr>
       </thead>
       <tbody>
         ${milestoneOrder.map((key) => {
           const ideal = campaign.idealTimeline.milestonePlan[key] || "";
           const deadline = key === "kickoff" ? (kickoffDeadlineDate ? toIso(kickoffDeadlineDate) : ideal) : ideal;
           const actual = campaign.actuals.milestoneActual[key] || "";
-          const projectedDate = getProjected(key);
-          const actualForProjection = key === "kickoff" ? campaign.baseline.kickoffDate : actual;
-          const projectedDisplayDate = actualForProjection || projectedDate;
-          const projectedClass = actualForProjection ? "projected-from-actual" : "projected-from-forecast";
+          const projectedManual = projectedInput[key] || "";
+          const projectedDate = currentCompletionIso(campaign, key);
+          const hasActual = key === "kickoff"
+            ? Boolean(parseDate(campaign.baseline.kickoffDate))
+            : Boolean(parseDate(actual));
+          const projectedClass = hasActual ? "projected-from-actual" : (projectedManual ? "projected-from-manual" : "projected-from-forecast");
           const idealDate = parseDate(deadline);
           const actualDate = parseDate(actual);
           const projectedDateObj = parseDate(projectedDate);
@@ -825,9 +828,9 @@ function renderIdealTimeline() {
               <td>${
                 key === "kickoff"
                   ? `<span class="status-meta">From baseline KO: ${formatDate(campaign.baseline.kickoffDate)}</span>`
-                  : `<input type="date" data-actual="${key}" max="${today}" value="${actual}" ${campaign.baseline.locked ? "" : "disabled"} />`
+                  : `<input type="date" data-actual="${key}" value="${actual || projectedManual}" ${campaign.baseline.locked ? "" : "disabled"} />`
               }</td>
-              <td><span class="projected-date ${projectedClass}">${formatDate(projectedDisplayDate)}</span></td>
+              <td><span class="projected-date ${projectedClass}">${formatDate(projectedDate)}${projectedManual ? " *" : ""}</span></td>
               <td>${key === "kickoff" ? "-" : varianceText}</td>
             </tr>
           `;
@@ -840,36 +843,37 @@ function renderIdealTimeline() {
     input.addEventListener("change", (event) => {
       const key = event.target.getAttribute("data-actual");
       const value = event.target.value || "";
-      if (value && isFutureIsoDate(value)) {
-        window.alert("Actual completion dates cannot be in the future.");
-        event.target.value = campaign.actuals.milestoneActual[key] || "";
-        return;
-      }
       if (value && !isUkWorkingDay(parseDate(value))) {
-        window.alert("Actual completion dates must be on a working day.");
-        event.target.value = campaign.actuals.milestoneActual[key] || "";
+        window.alert("Dates must be on a working day.");
+        event.target.value = campaign.actuals.milestoneActual[key] || campaign.actuals.milestoneProjected[key] || "";
         return;
       }
 
       if (key === "promoting" && value) {
-        const publishActual = campaign.actuals.milestoneActual.publishing || "";
-        if (!publishActual) {
-          window.alert("Set the Publishing actual date before setting Promoting.");
-          event.target.value = campaign.actuals.milestoneActual[key] || "";
+        const publishDate = campaign.actuals.milestoneActual.publishing || campaign.actuals.milestoneProjected.publishing || "";
+        if (!publishDate) {
+          window.alert("Set the Publishing date before setting Promoting.");
+          event.target.value = campaign.actuals.milestoneActual[key] || campaign.actuals.milestoneProjected[key] || "";
           return;
         }
-        if (value < publishActual) {
+        if (value < publishDate) {
           window.alert("Promoting cannot be earlier than Publishing.");
-          event.target.value = campaign.actuals.milestoneActual[key] || "";
+          event.target.value = campaign.actuals.milestoneActual[key] || campaign.actuals.milestoneProjected[key] || "";
           return;
         }
       }
 
       const before = cloneCampaign(campaign.derived);
-      const oldValue = campaign.actuals.milestoneActual[key] || "";
-      campaign.actuals.milestoneActual[key] = value;
-      if (key === "publishing") campaign.actuals.firstPublishActualDate = value;
-      if (key === "reporting") campaign.actuals.reportSharedActualDate = value;
+      const oldValue = campaign.actuals.milestoneActual[key] || campaign.actuals.milestoneProjected[key] || "";
+      if (value && isFutureIsoDate(value)) {
+        campaign.actuals.milestoneActual[key] = "";
+        campaign.actuals.milestoneProjected[key] = value;
+      } else {
+        campaign.actuals.milestoneActual[key] = value;
+        campaign.actuals.milestoneProjected[key] = "";
+      }
+      if (key === "publishing") campaign.actuals.firstPublishActualDate = campaign.actuals.milestoneActual.publishing || "";
+      if (key === "reporting") campaign.actuals.reportSharedActualDate = campaign.actuals.milestoneActual.reporting || "";
       recomputeAll(campaign);
       const after = cloneCampaign(campaign.derived);
       setImpactSummary(key, oldValue, value, before, after);
@@ -896,13 +900,13 @@ function setImpactSummary(milestoneKey, oldValue, newValue, before, after) {
 
   const shiftLines = [];
   if (publishDelta !== null && publishDelta !== 0) {
-    shiftLines.push(`Projected publishing moved ${publishDelta > 0 ? `later by ${publishDelta}` : `earlier by ${Math.abs(publishDelta)}`} day(s).`);
+    shiftLines.push(`Current publishing moved ${publishDelta > 0 ? `later by ${publishDelta}` : `earlier by ${Math.abs(publishDelta)}`} day(s).`);
   }
   if (reportDelta !== null && reportDelta !== 0) {
-    shiftLines.push(`Projected reporting moved ${reportDelta > 0 ? `later by ${reportDelta}` : `earlier by ${Math.abs(reportDelta)}`} day(s).`);
+    shiftLines.push(`Current reporting moved ${reportDelta > 0 ? `later by ${reportDelta}` : `earlier by ${Math.abs(reportDelta)}`} day(s).`);
   }
   if (promoDelta !== 0) {
-    shiftLines.push(`Projected promotion window ${promoDelta > 0 ? `increased by ${promoDelta}` : `reduced by ${Math.abs(promoDelta)}`} day(s).`);
+    shiftLines.push(`Current promotion window ${promoDelta > 0 ? `increased by ${promoDelta}` : `reduced by ${Math.abs(promoDelta)}`} day(s).`);
   }
   if (before.feasible !== after.feasible) {
     shiftLines.push(after.feasible ? "Timeline moved back to feasible." : "Timeline is now no longer feasible.");
@@ -984,32 +988,37 @@ function renderTimelineVisual(viewMode, hostId) {
   const showProjected = Boolean(campaign.settings.showProjectedOnCharts);
   const showLag = campaign.settings.showLagOnCharts !== false;
   const showIdeal = !showProjected;
-  const projectedMilestones = campaign.derived.projectedMilestones || {};
-  const projectedAnchorDateFor = (key) =>
-    parseDate(campaign.actuals.milestoneActual[key])
-    || parseDate(projectedMilestones[key])
-    || parseDate(campaign.idealTimeline.milestonePlan[key]);
-  const idealProdStart = parseDate(campaign.idealTimeline.phaseWindows.production.start);
-  const idealProdEnd = parseDate(campaign.idealTimeline.phaseWindows.production.end);
-  const idealPromStart = parseDate(campaign.idealTimeline.phaseWindows.promotion.start);
-  const idealPromEnd = parseDate(campaign.idealTimeline.phaseWindows.promotion.end);
-  const idealRepStart = parseDate(campaign.idealTimeline.phaseWindows.reporting.start);
-  const idealRepEnd = parseDate(campaign.idealTimeline.phaseWindows.reporting.end);
-  const idealPhaseRanges = {
-    prodStart: idealProdStart,
-    prodEnd: idealProdEnd,
-    promStart: idealPromStart,
-    promEnd: idealPromEnd,
-    repStart: idealRepStart,
-    repEnd: idealRepEnd
+  const hasActualForKey = (key) => {
+    if (key === "kickoff") return Boolean(parseDate(campaign.baseline.kickoffDate));
+    return Boolean(parseDate(campaign.actuals.milestoneActual[key]));
   };
+  const projectedAnchorDateFor = (key) =>
+    parseDate(currentCompletionIso(campaign, key));
+  const idealKickoff = parseDate(campaign.idealTimeline.milestonePlan.kickoff);
+  const idealClientReview = parseDate(campaign.idealTimeline.milestonePlan.clientReview);
+  const idealPublishing = parseDate(campaign.idealTimeline.milestonePlan.publishing);
+  const idealPromoting = parseDate(campaign.idealTimeline.milestonePlan.promoting);
+  const idealReporting = parseDate(campaign.idealTimeline.milestonePlan.reporting);
+  const idealPhaseRanges = {
+    prodStart: idealKickoff,
+    prodEnd: idealClientReview,
+    promStart: idealPublishing,
+    promEnd: idealPromoting,
+    repStart: idealPromoting ? addDays(idealPromoting, 1) : null,
+    repEnd: idealReporting
+  };
+  const projectedKickoff = projectedAnchorDateFor("kickoff");
+  const projectedClientReview = projectedAnchorDateFor("clientReview");
+  const projectedPublishing = projectedAnchorDateFor("publishing");
+  const projectedPromoting = projectedAnchorDateFor("promoting");
+  const projectedReporting = projectedAnchorDateFor("reporting");
   const projectedPhaseRanges = {
-    prodStart: projectedAnchorDateFor("kickoff"),
-    prodEnd: projectedAnchorDateFor("publishing"),
-    promStart: projectedAnchorDateFor("publishing"),
-    promEnd: projectedAnchorDateFor("promoting"),
-    repStart: projectedAnchorDateFor("promoting"),
-    repEnd: projectedAnchorDateFor("reporting")
+    prodStart: projectedKickoff,
+    prodEnd: projectedClientReview,
+    promStart: projectedPublishing,
+    promEnd: projectedPromoting,
+    repStart: projectedPromoting ? addDays(projectedPromoting, 1) : null,
+    repEnd: projectedReporting
   };
   const phaseRanges = showProjected ? projectedPhaseRanges : idealPhaseRanges;
   // Use a shared time axis across ideal/projected views so toggle comparisons align exactly.
@@ -1067,7 +1076,7 @@ function renderTimelineVisual(viewMode, hostId) {
       { type: "bar", label: "Client review", start: "internalReview", end: "clientReview" },
       { type: "milestone", label: "Publishing", key: "publishing" },
       { type: "bar", label: "Promoting", start: "publishing", end: "promoting" },
-      { type: "milestone", label: "Reporting", key: "reporting" }
+      { type: "milestone", label: "Report", key: "reporting" }
     ]
     : [
       { type: "milestone", label: "Kick-off", key: "kickoff" },
@@ -1078,7 +1087,7 @@ function renderTimelineVisual(viewMode, hostId) {
       { type: "bar", label: "Client review", start: "internalReview", end: "clientReview" },
       { type: "milestone", label: "Publishing", key: "publishing" },
       { type: "bar", label: "Promoting", start: "publishing", end: "promoting" },
-      { type: "milestone", label: "Reporting", key: "reporting" }
+      { type: "milestone", label: "Report", key: "reporting" }
     ];
   const laneTaskEnd = laneTaskStart + (flowRows.length * rowGap);
   const monthRowY = laneTaskEnd + 10;
@@ -1126,11 +1135,6 @@ function renderTimelineVisual(viewMode, hostId) {
   const xOf = (d) => left + ((indexOfDate(d) + 0.5) * slotWidth);
   const xStartOf = (d) => left + (indexOfDate(d) * slotWidth);
   const xEndOf = (d) => left + ((indexOfDate(d) + 1) * slotWidth);
-  // Align band starts with the same rendered week as milestone points.
-  // This prevents weekend dates from showing a milestone in one week
-  // while the phase band starts in the previous week.
-  const weekStartX = (d) => xStartOf(weekStartMonday(snapToWeekday(d)));
-  const weekEndX = (d) => xEndOf(addDays(weekStartMonday(d), 4));
   const phaseClassForStep = (stepKey) => {
     if (stepKey === "reporting") return "vis-step-rep";
     if (stepKey === "promoting" || stepKey === "publishing") return "vis-step-prom";
@@ -1170,14 +1174,10 @@ function renderTimelineVisual(viewMode, hostId) {
   }
 
   const phaseBands = [];
-  let phaseCursorX = left;
   const addPhaseBand = (start, end, cls, label) => {
     if (!start || !end) return;
-    let x1 = weekStartX(start);
-    let x2 = weekEndX(end);
-    x1 = Math.max(x1, phaseCursorX);
-    x2 = Math.max(x2, x1 + 2);
-    phaseCursorX = x2;
+    const x1 = xStartOf(start);
+    const x2 = Math.max(xEndOf(end), x1 + 2);
     phaseBands.push(`<rect class="${cls}" x="${x1}" y="48" width="${x2 - x1}" height="${timelineBottom - 40}" rx="8" ry="8"/>`);
     phaseBands.push(`<text class="vis-text vis-band-label" x="${x1 + 8}" y="64">${label}</text>`);
   };
@@ -1229,7 +1229,7 @@ function renderTimelineVisual(viewMode, hostId) {
       const start = parseDate(campaign.idealTimeline.milestonePlan[item.start]);
       const planEnd = parseDate(campaign.idealTimeline.milestonePlan[item.key]);
       const actualEnd = parseDate(campaign.actuals.milestoneActual[item.key]);
-      const projectedEnd = parseDate(projectedMilestones[item.key]);
+      const projectedEnd = projectedAnchorDateFor(item.key);
       if (!start || !planEnd) return;
 
       const x1 = xStartOf(start);
@@ -1241,8 +1241,9 @@ function renderTimelineVisual(viewMode, hostId) {
         const pEnd = projectedAnchorDateFor(item.key);
         if (pEnd) {
           const px2 = xEndOf(pEnd);
-          projectedParts.push(`<rect class="vis-task ${stepPhaseClass}" x="${x1}" y="${y}" width="${Math.max(6, px2 - x1)}" height="${STEP_BAR_HEIGHT}" rx="8" ry="8"/>`);
-          projectedParts.push(`<rect class="vis-plan-node" x="${xOf(pEnd) - 4}" y="${y}" width="10" height="${MILESTONE_HEIGHT}" rx="3" ry="3"/>`);
+          const forecastClass = hasActualForKey(item.key) ? "" : " vis-forecast";
+          projectedParts.push(`<rect class="vis-task ${stepPhaseClass}${forecastClass}" x="${x1}" y="${y}" width="${Math.max(6, px2 - x1)}" height="${STEP_BAR_HEIGHT}" rx="8" ry="8"/>`);
+          projectedParts.push(`<rect class="vis-plan-node${forecastClass}" x="${xOf(pEnd) - 4}" y="${y}" width="10" height="${MILESTONE_HEIGHT}" rx="3" ry="3"/>`);
           maxXParts.push(px2);
           maxXParts.push(xOf(pEnd));
         }
@@ -1271,10 +1272,10 @@ function renderTimelineVisual(viewMode, hostId) {
           const lagX2 = Math.max(idealX, actualX);
           const lagText = lagDays > 0 ? `+${lagDays}d` : `${lagDays}d`;
           const lagBarClass = lagDays < 0 ? "vis-lag-bar vis-lag-bar-ahead" : "vis-lag-bar";
-          lagParts.push(`<rect class="${lagBarClass}" x="${lagX1}" y="${y + 1}" width="${Math.max(2, lagX2 - lagX1)}" height="10" rx="5" ry="5"/>`);
+          lagParts.push(`<rect class="${lagBarClass}" x="${lagX1}" y="${y}" width="${Math.max(2, lagX2 - lagX1)}" height="${STEP_BAR_HEIGHT}" rx="8" ry="8"/>`);
           if (viewMode !== "internal") {
             const labelX = Math.min(lagX2 + 5, width - right - 6);
-            lagParts.push(`<text class="vis-lag-label vis-lag-label-hover" x="${labelX}" y="${y + 4}">${lagText}</text>`);
+            lagParts.push(`<text class="vis-lag-label vis-lag-label-hover" x="${labelX}" y="${y + 14}">${lagText}</text>`);
           }
         }
       }
@@ -1299,12 +1300,13 @@ function renderTimelineVisual(viewMode, hostId) {
       let labelAnchorX = null;
       let insidePromoLabel = "";
       if (showProjected) {
-        const pStart = parseDate(projectedMilestones[item.start] || campaign.idealTimeline.milestonePlan[item.start]);
-        const pEnd = parseDate(projectedMilestones[item.end] || campaign.idealTimeline.milestonePlan[item.end]);
+        const pStart = projectedAnchorDateFor(item.start);
+        const pEnd = projectedAnchorDateFor(item.end);
         if (pStart && pEnd) {
           const px1 = xStartOf(pStart);
           const px2 = xEndOf(pEnd);
-          projectedParts.push(`<rect class="vis-task ${stepPhaseClass}" x="${px1}" y="${y}" width="${Math.max(6, px2 - px1)}" height="${STEP_BAR_HEIGHT}" rx="8" ry="8"/>`);
+          const forecastClass = hasActualForKey(item.end) ? "" : " vis-forecast";
+          projectedParts.push(`<rect class="vis-task ${stepPhaseClass}${forecastClass}" x="${px1}" y="${y}" width="${Math.max(6, px2 - px1)}" height="${STEP_BAR_HEIGHT}" rx="8" ry="8"/>`);
           labelAnchorX = px2;
           if (item.end === "promoting") {
             // Keep label value aligned with the rendered projected bar length.
@@ -1330,7 +1332,7 @@ function renderTimelineVisual(viewMode, hostId) {
       }
 
       const actualEnd = parseDate(campaign.actuals.milestoneActual[item.end]);
-      const projectedEnd = parseDate(projectedMilestones[item.end]);
+      const projectedEnd = projectedAnchorDateFor(item.end);
       if (showLag && actualEnd) {
         const idealX = xOf(end);
         const actualX = xOf(actualEnd);
@@ -1340,10 +1342,10 @@ function renderTimelineVisual(viewMode, hostId) {
           const lagX2 = Math.max(idealX, actualX);
           const lagText = lagDays > 0 ? `+${lagDays}d` : `${lagDays}d`;
           const lagBarClass = lagDays < 0 ? "vis-lag-bar vis-lag-bar-ahead" : "vis-lag-bar";
-          lagParts.push(`<rect class="${lagBarClass}" x="${lagX1}" y="${y + 1}" width="${Math.max(2, lagX2 - lagX1)}" height="10" rx="5" ry="5"/>`);
+          lagParts.push(`<rect class="${lagBarClass}" x="${lagX1}" y="${y}" width="${Math.max(2, lagX2 - lagX1)}" height="${STEP_BAR_HEIGHT}" rx="8" ry="8"/>`);
           if (viewMode !== "internal") {
             const labelX = Math.min(lagX2 + 5, width - right - 6);
-            lagParts.push(`<text class="vis-lag-label vis-lag-label-hover" x="${labelX}" y="${y + 4}">${lagText}</text>`);
+            lagParts.push(`<text class="vis-lag-label vis-lag-label-hover" x="${labelX}" y="${y + 14}">${lagText}</text>`);
           }
         }
       }
@@ -1361,7 +1363,8 @@ function renderTimelineVisual(viewMode, hostId) {
     const visibleRightEdge = labelCandidates.length ? Math.max(...labelCandidates) : 0;
     const labelX = Math.min(visibleRightEdge + 8, width - right - 6);
     if (showProjected && projectedForStep) {
-      projectedParts.push(`<rect class="vis-plan-node" x="${xOf(projectedForStep) - 4}" y="${y}" width="10" height="${MILESTONE_HEIGHT}" rx="3" ry="3"/>`);
+      const forecastClass = hasActualForKey(item.key) ? "" : " vis-forecast";
+      projectedParts.push(`<rect class="vis-plan-node${forecastClass}" x="${xOf(projectedForStep) - 4}" y="${y}" width="10" height="${MILESTONE_HEIGHT}" rx="3" ry="3"/>`);
     }
     if (showIdeal && plan) rowObjects.push(`<rect class="vis-plan-node" x="${xOf(plan) - 4}" y="${y}" width="10" height="${MILESTONE_HEIGHT}" rx="3" ry="3"/>`);
     if (actual && !(showProjected && !showIdeal)) rowObjects.push(`<rect class="vis-actual-node" x="${xOf(actual) - 4}" y="${y}" width="10" height="${MILESTONE_HEIGHT}" rx="3" ry="3"/>`);
@@ -1378,10 +1381,10 @@ function renderTimelineVisual(viewMode, hostId) {
         const lagX2 = Math.max(idealX, actualX);
         const lagText = lagDays > 0 ? `+${lagDays}d` : `${lagDays}d`;
         const lagBarClass = lagDays < 0 ? "vis-lag-bar vis-lag-bar-ahead" : "vis-lag-bar";
-        lagParts.push(`<rect class="${lagBarClass}" x="${lagX1}" y="${y + 1}" width="${Math.max(2, lagX2 - lagX1)}" height="10" rx="5" ry="5"/>`);
+        lagParts.push(`<rect class="${lagBarClass}" x="${lagX1}" y="${y}" width="${Math.max(2, lagX2 - lagX1)}" height="${STEP_BAR_HEIGHT}" rx="8" ry="8"/>`);
         if (viewMode !== "internal") {
           const lagLabelX = Math.min(lagX2 + 5, width - right - 6);
-          lagParts.push(`<text class="vis-lag-label vis-lag-label-hover" x="${lagLabelX}" y="${y + 4}">${lagText}</text>`);
+          lagParts.push(`<text class="vis-lag-label vis-lag-label-hover" x="${lagLabelX}" y="${y + 14}">${lagText}</text>`);
         }
       }
     }
@@ -1411,7 +1414,7 @@ function renderTimelineVisual(viewMode, hostId) {
   const actualPublish = parseDate(campaign.actuals.milestoneActual.publishing || campaign.actuals.firstPublishActualDate);
   const projectedPublish = parseDate(campaign.derived.projectedPublishDate || campaign.derived.projectedMilestones?.publishing);
   const publishForPolicyLag = actualPublish || projectedPublish;
-  const publishLagSource = actualPublish ? "actual" : "projected";
+  const publishLagSource = actualPublish ? "actual" : "current";
   const policyPublishLagVisual = (viewMode === "internal" && policyDate && publishForPolicyLag)
     ? (() => {
       const lagDays = diffDays(policyDate, publishForPolicyLag);
@@ -1432,7 +1435,7 @@ function renderTimelineVisual(viewMode, hostId) {
   const actualReport = parseDate(campaign.actuals.reportSharedActualDate || campaign.actuals.milestoneActual.reporting);
   const projectedReport = parseDate(campaign.derived.projectedReportDate || campaign.derived.projectedMilestones?.reporting);
   const reportForPolicyLag = actualReport || projectedReport;
-  const reportLagSource = actualReport ? "actual" : "projected";
+  const reportLagSource = actualReport ? "actual" : "current";
   const policyReportLagVisual = (viewMode === "internal" && policyDay90Date && reportForPolicyLag)
     ? (() => {
       const lagDays = diffDays(policyDay90Date, reportForPolicyLag);
@@ -1460,7 +1463,7 @@ function renderTimelineVisual(viewMode, hostId) {
       ${contractExtensionEnd ? '<span><span class="key-line key-contract-extension"></span>Contract extension end</span>' : ""}
       <span><span class="key-line key-policy"></span>Policy Day 30</span>
       <span><span class="key-line key-policy-90"></span>Policy Day 90</span>
-      ${showProjected ? '<span><span class="key-line key-projected"></span>Projected publish</span><span><span class="key-swatch key-projected-bar"></span>Projected step bar</span>' : ""}
+      ${showProjected ? '<span><span class="key-line key-projected"></span>Current publish</span><span><span class="key-swatch key-projected-bar"></span>Current step bar</span>' : ""}
     `
     : `
       <span><span class="key-line key-contract-start"></span>Contract start</span>
@@ -1474,7 +1477,7 @@ function renderTimelineVisual(viewMode, hostId) {
       <div class="timeline-range">${formatDate(min)} -> ${formatDate(max)}</div>
       ${timelineMeta ? `<div class="timeline-meta">${timelineMeta}</div>` : ""}
     </div>
-    <svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Ideal vs actual timeline">
+    <svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Initial vs current timeline">
       <line class="vis-axis" x1="${left}" y1="34" x2="${width - right}" y2="34"/>
       <!-- Keep vertical reference lines behind label text for readability. -->
       ${contractVisuals}
@@ -1510,7 +1513,7 @@ function renderStatusAndFeasibility() {
       </div>
       <div class="kpi-stack">
         <div class="kpi-number">${campaign.derived.projectedPromotionDays}</div>
-        <div class="kpi-label">Projected promotion days</div>
+        <div class="kpi-label">Current promotion days</div>
       </div>
       <div class="status-meta">${campaign.derived.feasibilityReason}</div>
     </div>
@@ -1545,41 +1548,6 @@ function renderStatusAndFeasibility() {
   }
 }
 
-function renderActions() {
-  const policy = policyStatusDisplay();
-  const stage = campaignStageStatus();
-  const actions = [];
-
-  if (!campaign.baseline.locked) {
-    actions.push("Complete baseline setup and click Lock baseline.");
-  }
-
-  if (campaign.baseline.locked && !campaign.actuals.milestoneActual.interview) {
-    actions.push("Update Interview actual completion date before progressing Writing and later production steps.");
-  }
-
-  if (!campaign.derived.feasible) {
-    actions.push("Align with AM and client now. Current timeline no longer supports a 30-day promotion window.");
-  }
-
-  if (policy.label === "Missed") {
-    actions.push("Record policy miss in client comms and reporting. This remains permanently flagged.");
-  }
-
-  if (stage.label === "Critical") {
-    actions.push("Move stage back or resolve dependency before continuing execution.");
-  }
-
-  if (!actions.length) {
-    actions.push("No immediate intervention needed. Continue updating actual completion dates for workflow steps.");
-  }
-
-  const primary = document.getElementById("primaryAction");
-  const list = document.getElementById("csmActions");
-  primary.innerHTML = `<strong>Do this first</strong>${actions[0]}`;
-  list.innerHTML = actions.slice(1).map((item) => `<li>${item}</li>`).join("");
-}
-
 function renderRevisions() {
   const el = document.getElementById("revisionsList");
   if (!campaign.revisions.length) {
@@ -1593,7 +1561,7 @@ function renderRevisions() {
       <div>Reason: ${rev.reason}</div>
       <div>Contract end used: ${formatDate(rev.baseline?.contractEndDate)}</div>
       <div>Kick-off used: ${formatDate(rev.baseline?.kickoffDate)}</div>
-      <div>Projected publish at snapshot: ${formatDate(rev.derived?.projectedPublishDate)}</div>
+      <div>Current publish at snapshot: ${formatDate(rev.derived?.projectedPublishDate)}</div>
     </div>
   `).join("");
 }
@@ -1606,9 +1574,6 @@ function writeCampaignToForm() {
   document.getElementById("contractEndDate").value = campaign.baseline.contractEndDate;
   document.getElementById("kickoffDate").value = campaign.baseline.kickoffDate;
   document.getElementById("extension30Days").checked = campaign.baseline.extension30Days;
-
-  document.getElementById("liveStage").innerHTML = liveStages.map((stage) => `<option value="${stage}">${stage}</option>`).join("");
-  document.getElementById("liveStage").value = campaign.derived.liveStage || campaign.ui.liveStage || liveStages[0];
 
   document.getElementById("useBusinessDays").checked = campaign.settings.useBusinessDays;
   document.getElementById("showProjectedOnCharts").checked = campaign.settings.showProjectedOnCharts;
@@ -1634,8 +1599,6 @@ function readFormToCampaign() {
   }
 
   campaign.baseline.extension30Days = document.getElementById("extension30Days").checked;
-  campaign.ui.liveStage = document.getElementById("liveStage").value;
-
   recomputeAll(campaign);
 }
 
@@ -1976,7 +1939,7 @@ function runAcceptanceTests() {
 
   const futureBlocked = isFutureIsoDate("2099-01-01", new Date("2026-01-10T00:00:00"));
   const nonFutureAllowed = !isFutureIsoDate("2026-01-10", new Date("2026-01-10T00:00:00"));
-  assert("6) Future actual prevention", futureBlocked && nonFutureAllowed, "Validation helper blocks future actual dates and allows today/past dates.");
+  assert("6) Future date detection", futureBlocked && nonFutureAllowed, "Future dates are detected so inputs can be stored as projected instead of actual.");
 
   const t7 = cloneCampaign(base);
   const week1Start = parseDate(t7.idealTimeline.milestonePlan.contentPlan);
@@ -1998,7 +1961,7 @@ function runAcceptanceTests() {
 }
 
 function bindEvents() {
-  document.querySelectorAll("#campaignName,#clientBrand,#publication,#contractStartDate,#contractEndDate,#kickoffDate,#extension30Days,#liveStage,#useBusinessDays,#showProjectedOnCharts,#showLagOnCharts,#chartInternalView")
+  document.querySelectorAll("#campaignName,#clientBrand,#publication,#contractEndDate,#kickoffDate,#extension30Days,#useBusinessDays,#showProjectedOnCharts,#showLagOnCharts,#chartInternalView")
     .forEach((el) => {
       el.addEventListener("change", () => {
         readFormToCampaign();
@@ -2006,6 +1969,21 @@ function bindEvents() {
         render();
       });
     });
+
+  document.getElementById("contractStartDate").addEventListener("change", (event) => {
+    const startIso = event.target.value;
+    if (!campaign.baseline.locked && startIso) {
+      const startDate = parseDate(startIso);
+      if (startDate) {
+        // Default contract end to 90 days after start; user can still edit end date afterwards.
+        const autoEnd = toIso(addDays(startDate, 90));
+        document.getElementById("contractEndDate").value = autoEnd;
+      }
+    }
+    readFormToCampaign();
+    saveCampaign();
+    render();
+  });
 
   document.getElementById("lockBaseline").addEventListener("click", lockBaseline);
   document.getElementById("unlockBaseline").addEventListener("click", unlockBaseline);
@@ -2029,7 +2007,6 @@ function render() {
   const viewMode = campaign.settings.chartInternalView ? "internal" : "client";
   renderTimelineVisual(viewMode, "timelineVisualMain");
   renderStatusAndFeasibility();
-  renderActions();
   renderRevisions();
 }
 
