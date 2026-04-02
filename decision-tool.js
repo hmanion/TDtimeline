@@ -1,4 +1,4 @@
-const checkpoints = [
+let checkpoints = (window.CampaignHealthModel?.cloneCheckpoints?.()) || [
   {
     title: "Kick-off",
     question: "Can the client name who the SME is?",
@@ -551,16 +551,16 @@ const nextBtn = document.getElementById("nextBtn");
 const resetAll = document.getElementById("resetAll");
 const summaryList = document.getElementById("summaryList");
 
-function statusClass(status) {
+const statusClass = window.CampaignHealthModel?.statusClass || function statusClass(status) {
   if (status === "On Track") return "status-ontrack";
   if (status === "At Risk") return "status-risk";
   if (status === "Behind") return "status-behind";
   if (status === "Critical") return "status-critical";
   if (status === "On Hold" || status === "Expired") return "status-hold";
   return "status-ontrack";
-}
+};
 
-const severityRank = {
+const severityRank = window.CampaignHealthModel?.severityRank || {
   "On Track": 0,
   "At Risk": 1,
   "Behind": 2,
@@ -570,9 +570,9 @@ const severityRank = {
   "Complete": 4
 };
 
-function compareSeverity(a, b) {
+const compareSeverity = window.CampaignHealthModel?.compareSeverity || function compareSeverity(a, b) {
   return (severityRank[a] ?? 0) - (severityRank[b] ?? 0);
-}
+};
 
 function gateKey(index) {
   return String(index);
@@ -926,6 +926,9 @@ function campaignDayFromKo(ko) {
 function suggestedCheckpointIndex(day) {
   const ko = parseKoDate();
   if (!ko) return 0;
+  if (window.CampaignHealthModel?.suggestCheckpointIndex) {
+    return window.CampaignHealthModel.suggestCheckpointIndex(ko, new Date());
+  }
 
   const today = new Date();
   const checkpointsByDate = [

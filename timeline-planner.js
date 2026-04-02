@@ -33,6 +33,24 @@ const liveStages = [
   "Reporting"
 ];
 
+const healthModel = window.CampaignHealthModel || null;
+const campaignHealthCheckpoints = healthModel?.cloneCheckpoints?.() || [];
+
+function createEmptyHealthState() {
+  return {
+    currentCheckpointIndex: 0,
+    answersByCheckpoint: new Array(campaignHealthCheckpoints.length).fill(null),
+    autoResolved: new Array(campaignHealthCheckpoints.length).fill(false),
+    unresolvedQuestions: [],
+    effectiveStatuses: new Array(campaignHealthCheckpoints.length).fill(null),
+    currentHealthStatus: "On Track",
+    currentHealthAction: "",
+    currentHealthImpact: [],
+    currentCheckpointTitle: campaignHealthCheckpoints[0]?.title || "Kick-off",
+    currentResolvedBy: "Auto"
+  };
+}
+
 const emptyMilestones = {
   kickoff: "",
   contentPlan: "",
@@ -96,6 +114,7 @@ const defaultCampaign = {
     chartInternalView: false
   },
   revisions: [],
+  health: createEmptyHealthState(),
   ui: {
     lastImpact: null
   }
@@ -308,6 +327,19 @@ function migrateToV2(parsed) {
       },
       settings: { ...migrated.settings, ...(parsed.settings || {}) },
       revisions: Array.isArray(parsed.revisions) ? parsed.revisions : [],
+      health: {
+        ...createEmptyHealthState(),
+        ...(parsed.health || {}),
+        answersByCheckpoint: Array.isArray(parsed.health?.answersByCheckpoint)
+          ? parsed.health.answersByCheckpoint.slice(0, campaignHealthCheckpoints.length)
+          : createEmptyHealthState().answersByCheckpoint,
+        autoResolved: Array.isArray(parsed.health?.autoResolved)
+          ? parsed.health.autoResolved.slice(0, campaignHealthCheckpoints.length)
+          : createEmptyHealthState().autoResolved,
+        effectiveStatuses: Array.isArray(parsed.health?.effectiveStatuses)
+          ? parsed.health.effectiveStatuses.slice(0, campaignHealthCheckpoints.length)
+          : createEmptyHealthState().effectiveStatuses
+      },
       ui: { ...migrated.ui, ...(parsed.ui || {}) },
       schemaVersion: 2
     };
@@ -352,6 +384,11 @@ function migrateToV2(parsed) {
       schemaVersion: 2
     }))
     : [];
+
+  migrated.health = {
+    ...createEmptyHealthState(),
+    ...(parsed.health || {})
+  };
 
   return migrated;
 }
@@ -574,11 +611,179 @@ function computeDerived(c, now = new Date()) {
   c.derived = derived;
 }
 
+function healthOptionIndexBy(checkpoint, predicate) {
+  return checkpoint.options.findIndex(predicate);
+}
+
+function impactFromStatus(status, checkpointTitle) {
+  if (status === "On Track") return [`${checkpointTitle}: no immediate delivery risk detected.`];
+  if (status === "At Risk") return [`${checkpointTitle}: timeline risk emerging; delay likely without intervention.`];
+  if (status === "Behind") return [`${checkpointTitle}: timeline miss has occurred; promotion/reporting depth is reduced.`];
+  if (status === "Critical") return [`${checkpointTitle}: delivery path is severely constrained and decision is required now.`];
+  if (status === "On Hold") return [`${checkpointTitle}: execution is paused pending a decision.`];
+  if (status === "Expired") return [`${checkpointTitle}: campaign scope has closed without completion.`];
+  if (status === "Complete") return [`${checkpointTitle}: campaign outcomes are complete.`];
+  return ["No impact guidance available."];
+}
+
+function autoResolveCheckpoint(checkpoint, checkpointIndex, c, now = new Date()) {
+  const ko = parseDate(c.baseline.kickoffDate);
+  if (!ko) return null;
+  const week1Start = nextMondayAfterKoWeek(ko);
+  const week1End = addDays(week1Start, 6);
+  const week2Start = addDays(week1Start, 7);
+  const week2End = addDays(week2Start, 6);
+  const week3End = addDays(week2Start, 13);
+  const week4End = addDays(week2Start, 20);
+  const day30 = addDays(ko, 30);
+  const day30Plus5 = addDays(day30, 5);
+
+  const contentPlan = parseDate(c.actuals.milestoneActual.contentPlan);
+  const interview = parseDate(c.actuals.milestoneActual.interview);
+  const writing = parseDate(c.actuals.milestoneActual.writing);
+  const publishing = parseDate(c.actuals.milestoneActual.publishing || c.actuals.firstPublishActualDate);
+  const projectedPublish = parseDate(c.derived.projectedPublishDate);
+
+  if (checkpoint.title === "Kick-off") return null;
+
+  if (checkpoint.title === "Week 1") {
+    if (!contentPlan) return null;
+    if (contentPlan <= week1End) return healthOptionIndexBy(checkpoint, (o) => o.status === "On Track");
+    return healthOptionIndexBy(checkpoint, (o) => o.status === "At Risk");
+  }
+
+  if (checkpoint.title === "Week 2") {
+    if (!interview) return null;
+    if (interview <= week2End) return healthOptionIndexBy(checkpoint, (o) => o.status === "On Track");
+    if (interview <= week3End) return healthOptionIndexBy(checkpoint, (o) => o.status === "At Risk");
+    return healthOptionIndexBy(checkpoint, (o) => o.status === "Behind");
+  }
+
+  if (checkpoint.title === "Week 3") {
+    if (writing) return healthOptionIndexBy(checkpoint, (o) => o.status === "On Track");
+    if (interview && startOfDay(now) > week3End) return healthOptionIndexBy(checkpoint, (o) => o.status === "Behind");
+    return null;
+  }
+
+  if (checkpoint.title === "Week 4") {
+    if (publishing && publishing <= week4End) return healthOptionIndexBy(checkpoint, (o) => o.status === "On Track");
+    if (publishing && publishing <= addDays(week4End, 7)) return healthOptionIndexBy(checkpoint, (o) => o.status === "At Risk");
+    if (startOfDay(now) > week4End && !publishing) return healthOptionIndexBy(checkpoint, (o) => o.status === "Behind");
+    return null;
+  }
+
+  if (checkpoint.title === "Day 30") {
+    if (publishing && publishing <= day30) return healthOptionIndexBy(checkpoint, (o) => o.status === "On Track");
+    if (publishing && publishing <= day30Plus5) return healthOptionIndexBy(checkpoint, (o) => o.status === "At Risk");
+    if (!publishing && projectedPublish && projectedPublish <= day30Plus5) return healthOptionIndexBy(checkpoint, (o) => o.status === "At Risk");
+    if (startOfDay(now) > day30 && (!publishing || publishing > day30Plus5)) return healthOptionIndexBy(checkpoint, (o) => o.status === "Behind");
+    return null;
+  }
+
+  if (checkpoint.title === "Day 90") {
+    const reporting = parseDate(c.actuals.reportSharedActualDate || c.actuals.milestoneActual.reporting);
+    if (reporting && reporting <= addDays(ko, 90)) return healthOptionIndexBy(checkpoint, (o) => o.status === "On Track");
+    return null;
+  }
+
+  if (checkpoint.title === "Day 120") {
+    const reporting = parseDate(c.actuals.reportSharedActualDate || c.actuals.milestoneActual.reporting);
+    if (reporting) return healthOptionIndexBy(checkpoint, (o) => o.status === "Complete");
+    return null;
+  }
+
+  return null;
+}
+
+function computePlannerHealth(c, now = new Date()) {
+  const health = {
+    ...createEmptyHealthState(),
+    ...(c.health || {})
+  };
+
+  if (!campaignHealthCheckpoints.length) {
+    c.health = health;
+    return;
+  }
+
+  const ko = parseDate(c.baseline.kickoffDate);
+  health.currentCheckpointIndex = ko && healthModel?.suggestCheckpointIndex
+    ? healthModel.suggestCheckpointIndex(ko, now)
+    : 0;
+  health.currentCheckpointTitle = campaignHealthCheckpoints[health.currentCheckpointIndex]?.title || "Kick-off";
+
+  const answers = Array.isArray(health.answersByCheckpoint)
+    ? health.answersByCheckpoint.slice(0, campaignHealthCheckpoints.length)
+    : new Array(campaignHealthCheckpoints.length).fill(null);
+  while (answers.length < campaignHealthCheckpoints.length) answers.push(null);
+
+  const autoResolved = Array.isArray(health.autoResolved)
+    ? health.autoResolved.slice(0, campaignHealthCheckpoints.length)
+    : new Array(campaignHealthCheckpoints.length).fill(false);
+  while (autoResolved.length < campaignHealthCheckpoints.length) autoResolved.push(false);
+
+  const unresolvedQuestions = [];
+
+  campaignHealthCheckpoints.forEach((checkpoint, i) => {
+    if (i > health.currentCheckpointIndex) return;
+
+    if (answers[i] !== null && answers[i] !== undefined && autoResolved[i] === false) {
+      return;
+    }
+
+    const autoIdx = autoResolveCheckpoint(checkpoint, i, c, now);
+    if (autoIdx !== null && autoIdx >= 0) {
+      answers[i] = autoIdx;
+      autoResolved[i] = true;
+    } else if (autoResolved[i]) {
+      answers[i] = null;
+      autoResolved[i] = false;
+    }
+
+    // We only ask users about the current date checkpoint in the planner UI.
+    if (i !== health.currentCheckpointIndex) return;
+    if (answers[i] === null || answers[i] === undefined) {
+      unresolvedQuestions.push({
+        checkpointIndex: i,
+        title: checkpoint.title,
+        question: checkpoint.question,
+        options: checkpoint.options
+      });
+    }
+  });
+
+  const effective = healthModel?.computeEffectiveStatusFromAnswers
+    ? healthModel.computeEffectiveStatusFromAnswers(answers, campaignHealthCheckpoints)
+    : { effectiveStatuses: new Array(campaignHealthCheckpoints.length).fill(null), latestStatus: "On Track" };
+
+  const currentAnswerIndex = answers[health.currentCheckpointIndex];
+  const currentCheckpoint = campaignHealthCheckpoints[health.currentCheckpointIndex];
+  const currentOption = currentAnswerIndex !== null && currentAnswerIndex !== undefined
+    ? currentCheckpoint?.options?.[currentAnswerIndex] || null
+    : null;
+
+  health.answersByCheckpoint = answers;
+  health.autoResolved = autoResolved;
+  health.unresolvedQuestions = unresolvedQuestions;
+  health.effectiveStatuses = effective.effectiveStatuses;
+  health.currentHealthStatus = currentOption?.status || effective.latestStatus || "On Track";
+  health.currentHealthAction = currentOption?.action || (unresolvedQuestions.length ? "Answer pending checkpoint questions to set clear next actions." : "");
+  health.currentHealthImpact = currentOption ? impactFromStatus(currentOption.status, currentCheckpoint?.title || "Current checkpoint") : [];
+  health.currentResolvedBy = currentAnswerIndex === null || currentAnswerIndex === undefined
+    ? "Pending input"
+    : (autoResolved[health.currentCheckpointIndex] ? "Auto" : "User input");
+
+  c.health = health;
+}
+
 function recomputeAll(c) {
   if (parseDate(c.baseline.kickoffDate)) {
     computeIdealTimeline(c);
     computePolicyLayer(c);
     computeDerived(c);
+    computePlannerHealth(c);
+  } else {
+    c.health = createEmptyHealthState();
   }
 }
 
@@ -1431,7 +1636,16 @@ function renderTimelineVisual(viewMode, hostId) {
 function renderStatusAndFeasibility() {
   const policy = policyStatusDisplay();
   const stage = campaignStageStatus();
-  const currentPlanLabel = campaign.derived.feasible ? campaign.derived.currentPlanStatus : "Behind";
+  const health = campaign.health || createEmptyHealthState();
+  const healthStatus = health.currentHealthStatus || "On Track";
+  const compare = healthModel?.compareSeverity || ((a, b) => {
+    const rank = { "On Track": 0, "At Risk": 1, "Behind": 2, "Critical": 3, "On Hold": 4, "Expired": 4, "Complete": 4 };
+    return (rank[a] ?? 0) - (rank[b] ?? 0);
+  });
+  const summaryStatus = campaign.derived.feasible
+    ? healthStatus
+    : (compare(healthStatus, "Behind") < 0 ? "Behind" : healthStatus);
+  const feasibilityLabel = campaign.derived.feasible ? "On Track" : "Behind";
 
   const cards = document.getElementById("statusCards");
   cards.innerHTML = `
@@ -1441,8 +1655,13 @@ function renderStatusAndFeasibility() {
       <div class="status-meta">${policy.detail}</div>
     </div>
     <div class="status-card">
-      <h3>Current plan check</h3>
-      <span class="badge ${statusClass(currentPlanLabel)}">${currentPlanLabel}</span>
+      <h3>Campaign Health Summary</h3>
+      <span class="badge ${statusClass(summaryStatus)}">${summaryStatus}</span>
+      <div class="status-meta">Current checkpoint: <strong>${health.currentCheckpointTitle || "Kick-off"}</strong><br>Resolved by: ${health.currentResolvedBy || "Pending input"}</div>
+    </div>
+    <div class="status-card">
+      <h3>Feasibility check</h3>
+      <span class="badge ${statusClass(feasibilityLabel)}">${feasibilityLabel}</span>
       <div class="status-meta">Projected promotion window: <strong>${campaign.derived.projectedPromotionDays}</strong> day(s).<br>${campaign.derived.feasibilityReason}</div>
     </div>
     <div class="status-card">
@@ -1459,6 +1678,30 @@ function renderStatusAndFeasibility() {
   } else {
     banner.className = "feasibility-banner feasible";
     banner.innerHTML = `<strong>Timeline feasible.</strong> ${campaign.derived.feasibilityReason}`;
+  }
+
+  const healthCard = document.getElementById("plannerHealthCard");
+  healthCard.innerHTML = `
+    <div class="timeline-item">
+      <strong>${health.currentCheckpointTitle || "Kick-off"}: <span class="badge ${statusClass(healthStatus)}">${healthStatus}</span></strong>
+      <div class="status-meta"><strong>What to do now:</strong> ${health.currentHealthAction || "Answer pending questions below."}</div>
+      <div class="status-meta"><strong>Impact:</strong> ${(health.currentHealthImpact && health.currentHealthImpact.length) ? health.currentHealthImpact.join(" ") : "Awaiting checkpoint answer."}</div>
+      <div class="status-meta"><strong>Resolved by:</strong> ${health.currentResolvedBy || "Pending input"}</div>
+    </div>
+  `;
+
+  const questionWrap = document.getElementById("plannerHealthQuestions");
+  if (!health.unresolvedQuestions?.length) {
+    questionWrap.innerHTML = "";
+  } else {
+    questionWrap.innerHTML = health.unresolvedQuestions.map((item) => `
+      <div class="timeline-item health-question">
+        <strong>${item.title}: ${item.question}</strong>
+        <div class="health-options">
+          ${item.options.map((option, optionIndex) => `<button class="ghost health-option-btn" type="button" data-health-checkpoint="${item.checkpointIndex}" data-health-option="${optionIndex}">${option.answer}</button>`).join("")}
+        </div>
+      </div>
+    `).join("");
   }
 
   const impact = document.getElementById("impactSummary");
@@ -1479,6 +1722,7 @@ function renderStatusAndFeasibility() {
 function renderActions() {
   const policy = policyStatusDisplay();
   const stage = campaignStageStatus();
+  const health = campaign.health || createEmptyHealthState();
   const actions = [];
 
   if (!campaign.baseline.locked) {
@@ -1487,6 +1731,14 @@ function renderActions() {
 
   if (campaign.baseline.locked && !campaign.actuals.milestoneActual.interview) {
     actions.push("Update Interview actual completion date before progressing Writing and later production steps.");
+  }
+
+  if (health.currentHealthAction) {
+    actions.push(health.currentHealthAction);
+  }
+
+  if (health.unresolvedQuestions?.length) {
+    actions.push("Answer the unresolved Campaign Health checkpoint question(s) to confirm status and next action.");
   }
 
   if (!campaign.derived.feasible) {
@@ -1789,6 +2041,29 @@ function bindEvents() {
     downloadChartImage("timelineVisualMain", internal ? "internal-timeline-chart.png" : "client-timeline-chart.png");
   });
   document.getElementById("runTests").addEventListener("click", runAcceptanceTests);
+
+  const healthQuestions = document.getElementById("plannerHealthQuestions");
+  if (healthQuestions) {
+    healthQuestions.addEventListener("click", (event) => {
+      const btn = event.target.closest("button[data-health-checkpoint][data-health-option]");
+      if (!btn) return;
+      const checkpointIndex = Number(btn.getAttribute("data-health-checkpoint"));
+      const optionIndex = Number(btn.getAttribute("data-health-option"));
+      if (!Number.isInteger(checkpointIndex) || !Number.isInteger(optionIndex)) return;
+      if (!campaign.health) campaign.health = createEmptyHealthState();
+      if (!Array.isArray(campaign.health.answersByCheckpoint)) {
+        campaign.health.answersByCheckpoint = new Array(campaignHealthCheckpoints.length).fill(null);
+      }
+      if (!Array.isArray(campaign.health.autoResolved)) {
+        campaign.health.autoResolved = new Array(campaignHealthCheckpoints.length).fill(false);
+      }
+      campaign.health.answersByCheckpoint[checkpointIndex] = optionIndex;
+      campaign.health.autoResolved[checkpointIndex] = false;
+      recomputeAll(campaign);
+      saveCampaign();
+      render();
+    });
+  }
 
 }
 

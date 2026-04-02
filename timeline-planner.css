@@ -774,6 +774,20 @@
   margin-top: 12px;
 }
 
+.health-question {
+  margin-top: 8px;
+}
+
+.health-options {
+  display: grid;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.health-option-btn {
+  text-align: left;
+}
+
 .mini-title {
   font-size: 14px;
   margin: 0 0 8px;
