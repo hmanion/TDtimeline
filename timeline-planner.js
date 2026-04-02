@@ -225,6 +225,15 @@ function workingDayOnOrAfter(date) {
   return d;
 }
 
+function nextWorkingDayAfter(date) {
+  return workingDayOnOrAfter(addDays(date, 1));
+}
+
+function snapIsoToWorkingDay(value) {
+  const parsed = parseDate(value);
+  if (!parsed) return "";
+  return toIso(workingDayOnOrAfter(parsed));
+}
 function addBusinessDays(date, days) {
   const d = new Date(date);
   const direction = days >= 0 ? 1 : -1;
@@ -389,6 +398,18 @@ function activeContractEndDate(c) {
   return addDays(end, 30);
 }
 
+function normalizeNonContractDates(c) {
+  c.baseline.kickoffDate = snapIsoToWorkingDay(c.baseline.kickoffDate);
+  milestoneOrder.forEach((key) => {
+    c.actuals.milestoneActual[key] = snapIsoToWorkingDay(c.actuals.milestoneActual[key]);
+    c.actuals.milestoneProjected[key] = snapIsoToWorkingDay(c.actuals.milestoneProjected[key]);
+  });
+  c.actuals.firstPublishActualDate = snapIsoToWorkingDay(c.actuals.firstPublishActualDate);
+  c.actuals.reportSharedActualDate = snapIsoToWorkingDay(c.actuals.reportSharedActualDate);
+  if (c.actuals.milestoneActual.publishing) c.actuals.firstPublishActualDate = c.actuals.milestoneActual.publishing;
+  if (c.actuals.milestoneActual.reporting) c.actuals.reportSharedActualDate = c.actuals.milestoneActual.reporting;
+}
+
 function computeIdealTimeline(c) {
   const koInput = parseDate(c.baseline.kickoffDate);
   if (!koInput) return;
@@ -435,12 +456,18 @@ function computeIdealTimeline(c) {
 }
 
 function computePolicyLayer(c, now = new Date()) {
-  const ko = parseDate(c.baseline.kickoffDate);
-  if (!ko) return;
+  const koInput = parseDate(c.baseline.kickoffDate);
+  if (!koInput) return;
+  const ko = workingDayOnOrAfter(koInput);
+  const contractStart = parseDate(c.baseline.contractStartDate);
+  // If KO precedes contract start, policy clocks run from contract start.
+  const policyAnchor = contractStart && ko < startOfDay(contractStart)
+    ? startOfDay(contractStart)
+    : ko;
 
   // Policy checkpoints use fixed calendar-day offsets (no holiday allowances).
-  const day30 = addDays(ko, 30);
-  const day90 = addDays(ko, 90);
+  const day30 = workingDayOnOrAfter(addDays(policyAnchor, 30));
+  const day90 = workingDayOnOrAfter(addDays(policyAnchor, 90));
 
   c.policyLayer.firstPublishByDay30Deadline = toIso(day30);
   c.policyLayer.reportShareByDay90Deadline = toIso(day90);
@@ -505,6 +532,7 @@ function computeProjectedMilestones(c) {
   if (!ko) return projected;
 
   projected.kickoff = toIso(workingDayOnOrAfter(parseDate(ideal.kickoff) || ko));
+  let latestCompleted = parseDate(projected.kickoff);
 
   for (let i = 1; i < milestoneOrder.length; i += 1) {
     const key = milestoneOrder[i];
@@ -516,11 +544,17 @@ function computeProjectedMilestones(c) {
     const prevIdeal = parseDate(ideal[prevKey]);
 
     if (actualDate) {
-      projected[key] = toIso(workingDayOnOrAfter(actualDate));
+      const normalizedActual = workingDayOnOrAfter(actualDate);
+      projected[key] = toIso(normalizedActual);
+      latestCompleted = normalizedActual;
       continue;
     }
     if (projectedInputDate) {
-      projected[key] = toIso(workingDayOnOrAfter(projectedInputDate));
+      let projectedDate = workingDayOnOrAfter(projectedInputDate);
+      if (latestCompleted && projectedDate <= latestCompleted) {
+        projectedDate = nextWorkingDayAfter(latestCompleted);
+      }
+      projected[key] = toIso(projectedDate);
       continue;
     }
 
@@ -530,13 +564,21 @@ function computeProjectedMilestones(c) {
     }
 
     if (!prevProjected || !prevIdeal) {
-      projected[key] = toIso(workingDayOnOrAfter(idealDate));
+      let projectedDate = workingDayOnOrAfter(idealDate);
+      if (latestCompleted && projectedDate <= latestCompleted) {
+        projectedDate = nextWorkingDayAfter(latestCompleted);
+      }
+      projected[key] = toIso(projectedDate);
       continue;
     }
 
     const lag = Math.max(0, diffDays(prevIdeal, idealDate));
     const shifted = addOffset(prevProjected, lag, c.settings.useBusinessDays);
-    projected[key] = toIso(workingDayOnOrAfter(shifted > idealDate ? shifted : idealDate));
+    let projectedDate = workingDayOnOrAfter(shifted > idealDate ? shifted : idealDate);
+    if (latestCompleted && projectedDate <= latestCompleted) {
+      projectedDate = nextWorkingDayAfter(latestCompleted);
+    }
+    projected[key] = toIso(projectedDate);
   }
 
   // Projected promotion window rule:
@@ -607,6 +649,7 @@ function computeDerived(c, now = new Date()) {
 }
 
 function recomputeAll(c) {
+  normalizeNonContractDates(c);
   if (parseDate(c.baseline.kickoffDate)) {
     computeIdealTimeline(c);
     computePolicyLayer(c);
@@ -627,8 +670,8 @@ function lockBaseline() {
     window.alert("Contract end date must be after contract start date.");
     return;
   }
-  if (ko < start || ko > end) {
-    window.alert("Kick-off date must be within the contracted date range.");
+  if (ko > end) {
+    window.alert("Kick-off date cannot be after the contract end date.");
     return;
   }
 
@@ -843,20 +886,34 @@ function renderIdealTimeline() {
     input.addEventListener("change", (event) => {
       const key = event.target.getAttribute("data-actual");
       const value = event.target.value || "";
-      if (value && !isUkWorkingDay(parseDate(value))) {
-        window.alert("Dates must be on a working day.");
-        event.target.value = campaign.actuals.milestoneActual[key] || campaign.actuals.milestoneProjected[key] || "";
-        return;
+      const snappedValue = snapIsoToWorkingDay(value);
+      if (value && snappedValue && value !== snappedValue) {
+        window.alert(`Date moved to next working day: ${formatDate(snappedValue)}.`);
       }
 
-      if (key === "promoting" && value) {
-        const publishDate = campaign.actuals.milestoneActual.publishing || campaign.actuals.milestoneProjected.publishing || "";
+      const idx = milestoneOrder.indexOf(key);
+      if (snappedValue && idx > 1) {
+        const previousCompleted = milestoneOrder
+          .slice(1, idx)
+          .map((milestone) => parseDate(campaign.actuals.milestoneActual[milestone]))
+          .filter(Boolean)
+          .sort((a, b) => a - b)
+          .pop();
+        if (previousCompleted && parseDate(snappedValue) <= previousCompleted) {
+          window.alert(`${milestoneLabels[key]} must be after completed steps (${formatDate(previousCompleted)}).`);
+          event.target.value = campaign.actuals.milestoneActual[key] || campaign.actuals.milestoneProjected[key] || "";
+          return;
+        }
+      }
+
+      if (key === "promoting" && snappedValue) {
+        const publishDate = currentCompletionIso(campaign, "publishing");
         if (!publishDate) {
           window.alert("Set the Publishing date before setting Promoting.");
           event.target.value = campaign.actuals.milestoneActual[key] || campaign.actuals.milestoneProjected[key] || "";
           return;
         }
-        if (value < publishDate) {
+        if (snappedValue < publishDate) {
           window.alert("Promoting cannot be earlier than Publishing.");
           event.target.value = campaign.actuals.milestoneActual[key] || campaign.actuals.milestoneProjected[key] || "";
           return;
@@ -865,18 +922,18 @@ function renderIdealTimeline() {
 
       const before = cloneCampaign(campaign.derived);
       const oldValue = campaign.actuals.milestoneActual[key] || campaign.actuals.milestoneProjected[key] || "";
-      if (value && isFutureIsoDate(value)) {
+      if (snappedValue && isFutureIsoDate(snappedValue)) {
         campaign.actuals.milestoneActual[key] = "";
-        campaign.actuals.milestoneProjected[key] = value;
+        campaign.actuals.milestoneProjected[key] = snappedValue;
       } else {
-        campaign.actuals.milestoneActual[key] = value;
+        campaign.actuals.milestoneActual[key] = snappedValue;
         campaign.actuals.milestoneProjected[key] = "";
       }
       if (key === "publishing") campaign.actuals.firstPublishActualDate = campaign.actuals.milestoneActual.publishing || "";
       if (key === "reporting") campaign.actuals.reportSharedActualDate = campaign.actuals.milestoneActual.reporting || "";
       recomputeAll(campaign);
       const after = cloneCampaign(campaign.derived);
-      setImpactSummary(key, oldValue, value, before, after);
+      setImpactSummary(key, oldValue, snappedValue, before, after);
       saveCampaign();
       render();
     });
